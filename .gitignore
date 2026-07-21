@@ -1,0 +1,11 @@
+# dependencies (only needed to run the Node helper scripts; installed with `npm i firebase`)
+node_modules/
+package-lock.json
+package.json
+
+# firebase / editor / os cruft
+.firebase/
+*.log
+.DS_Store
+.vscode/
+.idea/

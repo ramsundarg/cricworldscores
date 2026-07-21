@@ -1,0 +1,1718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>🏏 CricWorldScores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  /* ===== Retro cricket almanack theme ===== */
+  :root{
+    --bg:#e7d8b5; --card:rgba(247,241,225,0.93); --card2:rgba(238,229,205,0.92); --line:#c3ab7c;
+    --txt:#33261a; --muted:#7c6a4d; --accent:#7d1a12; --accent2:#2f5d3f;
+    --danger:#9b2016; --warn:#9a6b12; --gold:#8a6d1f;
+    --serif:'EB Garamond', Georgia, 'Times New Roman', serif;
+    --display:'Playfair Display', Georgia, serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; font-family:var(--serif); background:var(--bg); color:var(--txt); line-height:1.45; font-size:17px;}
+  /* dynamic backdrop: random cricket clippings splattered on load (see loadBackdrop) */
+  #backdrop{position:fixed; inset:0; z-index:-2; overflow:hidden; pointer-events:none;}
+  #backdrop img{position:absolute; opacity:0; transition:opacity 1.3s ease; display:block; object-fit:cover;
+    filter:sepia(0.72) contrast(0.92) brightness(1.05) grayscale(0.12);
+    border:5px solid #f7f1e1; box-shadow:0 5px 16px rgba(50,35,15,0.45); }
+  #backdrop img.on{opacity:0.16;}
+  #backdrop img.great.on{opacity:0.24;}
+  /* grounds/stadiums shown in full colour */
+  #backdrop img.ground{filter:saturate(1.08) contrast(1.02) brightness(1.02);}
+  #backdrop img.ground.on{opacity:0.30;}
+  /* the ambient side collage only helps on wide screens; phones use the gallery below */
+  @media (max-width:760px){ #backdrop{display:none;} }
+  /* visible photo collage (home screen, under Leagues) */
+  .gallery{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); grid-auto-flow:dense; grid-auto-rows:54px; gap:10px; margin:16px 0 4px;}
+  .gallery .ph{grid-column:span 2; grid-row:span 2; overflow:hidden; background:#e7d8b5;
+    border:4px solid #f7f1e1; box-shadow:0 3px 10px rgba(50,35,15,0.35);}
+  .gallery .ph.hero{grid-column:span 3; grid-row:span 3;}
+  .gallery .ph.wide{grid-column:span 4;}
+  .gallery .ph.tall{grid-row:span 3;}
+  .gallery .ph.pano{grid-column:span 6;}
+  .gallery .ph img{width:100%; height:100%; object-fit:cover; display:block; opacity:0.72;
+    transition:opacity 0.6s ease; filter:sepia(0.92) contrast(0.9) brightness(1.05) grayscale(0.06);}
+  .gallery .ph img.ground{opacity:0.8; filter:sepia(0.4) saturate(1.05) contrast(1.0);}
+  /* the rotating Dravid frame — a touch clearer than the rest */
+  .gallery .ph img.dravid{opacity:0.9; filter:sepia(0.5) contrast(1.0) brightness(1.03);}
+  .gallery .ph:nth-child(3n){transform:rotate(-1.4deg);}
+  .gallery .ph:nth-child(3n+2){transform:rotate(1.3deg);}
+  @media (max-width:760px){
+    .gallery{grid-template-columns:repeat(4,minmax(0,1fr)); grid-auto-rows:46px; gap:7px;}
+    .gallery .ph.hero{grid-column:span 4; grid-row:span 3;}
+    .gallery .ph.wide,.gallery .ph.pano{grid-column:span 4;}
+  }
+  @media (max-width:430px){
+    .gallery{grid-auto-rows:42px; gap:6px;}
+    .gallery .ph{border-width:3px;}
+  }
+  /* paper grain + vignette */
+  body::after{ content:''; position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background:
+      radial-gradient(ellipse at 50% 40%, rgba(231,216,181,0) 55%, rgba(90,64,30,0.28) 100%),
+      repeating-linear-gradient(0deg, rgba(120,90,40,0.035) 0 2px, transparent 2px 4px); }
+  a{color:var(--accent); text-decoration-color:#c3ab7c; cursor:pointer;}
+  .wrap{max-width:640px; margin:0 auto; padding:14px 14px 90px;}
+  header.top{position:sticky; top:0; z-index:20; background:linear-gradient(#efe6cccc,#e7d8b5f2);
+    padding:10px 14px; border-bottom:3px double var(--accent); display:flex; align-items:center; gap:10px;
+    backdrop-filter:blur(2px);}
+  header.top h1{font-family:var(--display); font-weight:800; font-size:22px; margin:0; color:var(--accent); letter-spacing:.5px;}
+  header.top .tag{font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--muted);}
+  h2,h3,h4{font-family:var(--display); color:#5a1810; letter-spacing:.3px;}
+  .btn{appearance:none; border:1px solid var(--accent); background:var(--card2); color:var(--txt);
+    padding:11px 14px; border-radius:6px; font-size:15px; font-weight:600; cursor:pointer; font-family:var(--serif);}
+  .btn:active{transform:scale(.97);}
+  .btn.primary{background:var(--accent); border-color:#5a1810; color:#f7f1e1; letter-spacing:.5px;}
+  .btn.blue{background:var(--accent2); border-color:#204029; color:#f2efe0;}
+  .btn.danger{background:var(--danger); border-color:#6d160f; color:#fff;}
+  .btn.ghost{background:transparent;}
+  .btn.sm{padding:7px 10px; font-size:13px; border-radius:5px;}
+  .btn:disabled{opacity:.4;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:4px; padding:14px; margin:12px 0;
+    box-shadow:0 1px 0 #fff8 inset, 0 2px 8px rgba(70,50,20,0.12); }
+  label{display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; text-transform:uppercase; letter-spacing:.5px;}
+  input,select,textarea{width:100%; background:#fbf7ea; border:1px solid var(--line); color:var(--txt);
+    padding:11px; border-radius:4px; font-size:16px; font-family:var(--serif);}
+  textarea{min-height:120px; resize:vertical;}
+  .row{display:flex; gap:10px;} .row>*{flex:1;}
+  .muted{color:var(--muted);} .small{font-size:13px;} .center{text-align:center;}
+  .pill{display:inline-block; font-size:10px; padding:2px 8px; border-radius:3px; font-weight:700; letter-spacing:.5px;
+    text-transform:uppercase; border:1px solid;}
+  .pill.live{background:#f3dede; color:#7d1a12; border-color:#7d1a12;}
+  .pill.done{background:#dfe8dc; color:#2f5d3f; border-color:#2f5d3f;}
+  .pill.setup{background:#ece0c4; color:#7c6a4d; border-color:#c3ab7c;}
+  .matchrow{display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px dashed var(--line); cursor:pointer;}
+  .matchrow:last-child{border-bottom:0;}
+  .grid6{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+  .scorebtn{padding:20px 0; font-size:26px; font-weight:800; border-radius:6px; border:1px solid var(--line);
+    background:#fbf7ea; color:var(--txt); cursor:pointer; font-family:var(--display);}
+  .scorebtn:active{transform:scale(.96);}
+  .scorebtn.four{background:#dfe8dc; border-color:#2f5d3f; color:#204029;}
+  .scorebtn.six{background:#cfe0cc; border-color:#2f5d3f; color:#173a20;}
+  .scorebtn.zero{background:#efe6cc;}
+  .extras{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;}
+  .extras .btn{background:#efe0bf; border-color:#b78a2a; color:#6d4e12;}
+  .bignum{font-family:var(--display); font-size:46px; font-weight:900; line-height:1; color:var(--accent);}
+  .sb-top{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;}
+  table{width:100%; border-collapse:collapse; font-size:15px;}
+  th,td{text-align:left; padding:7px 6px; border-bottom:1px solid var(--line);}
+  th{color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.5px;}
+  td.n,th.n{text-align:right; font-variant-numeric:tabular-nums;}
+  .striker::after{content:" *"; color:var(--accent);}
+  .overlay{position:fixed; inset:0; background:rgba(40,28,12,0.55); display:flex; align-items:flex-end; justify-content:center; z-index:50;}
+  .sheet{background:#f7f1e1; border:1px solid var(--accent); border-radius:8px 8px 0 0;
+    width:100%; max-width:640px; padding:16px; max-height:85vh; overflow:auto;}
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px;}
+  .chip{padding:9px 12px; border-radius:999px; border:1px solid var(--line); background:#fbf7ea; cursor:pointer; font-size:14px;}
+  .chip.sel{background:var(--accent2); border-color:#204029; color:#f2efe0; font-weight:700;}
+  .toast{position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#33261a; color:#f7f1e1; border:1px solid var(--gold);
+    padding:10px 16px; border-radius:6px; z-index:60; font-size:14px;}
+  .hidden{display:none!important;}
+  .result{font-family:var(--display); font-size:18px; font-weight:800; color:var(--accent);}
+  .ball-timeline{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+  .b{width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+     font-size:12px; font-weight:700; background:#fbf7ea; border:1px solid var(--line); color:var(--txt); font-family:var(--display);}
+  .b.w{background:var(--danger); color:#fff; border-color:#6d160f;} .b.four{background:#dfe8dc; color:#204029; border-color:#2f5d3f;}
+  .b.six{background:#cfe0cc; color:#173a20; border-color:#2f5d3f;} .b.ex{background:#efe0bf; color:#6d4e12; border-color:#b78a2a;}
+</style>
+</head>
+<body>
+<div id="backdrop"></div>
+<header class="top">
+  <div style="flex:1; cursor:pointer" onclick="go('#/')">
+    <h1>🏏 Cricket Scorer</h1>
+    <div class="tag">The Gentleman's Game · Est. MMXXVI</div>
+  </div>
+  <span id="conn" class="small muted">…</span>
+</header>
+<div class="wrap" id="app"></div>
+<div id="modal"></div>
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+/* ============================ Firebase ============================ */
+let db=null, FIREBASE_OK=false;
+try{
+  if(window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey!=="PASTE_ME"){
+    firebase.initializeApp(window.FIREBASE_CONFIG);
+    db=firebase.firestore();
+    FIREBASE_OK=true;
+    document.getElementById('conn').textContent="● online";
+    document.getElementById('conn').style.color="var(--accent)";
+  }else{
+    document.getElementById('conn').textContent="⚠ not configured";
+    document.getElementById('conn').style.color="var(--warn)";
+  }
+}catch(e){ console.error(e); }
+
+const COL = ()=> db.collection('matches');
+
+/* ============================ Utilities ============================ */
+const $ = (id)=>document.getElementById(id);
+const app = $('app');
+const esc = (s)=> (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = ()=> Math.random().toString(36).slice(2,9);
+function toast(msg){ const t=$('toast'); t.innerHTML=`<div class="toast">${esc(msg)}</div>`; setTimeout(()=>t.innerHTML='',1800); }
+function go(hash){ location.hash=hash; }
+function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function closeModal(){ $('modal').innerHTML=''; }
+// Resolve a stable player id -> display name (players are stored as {id,name}).
+function pName(m,id){
+  for(const k of ['A','B']){ const p=(m.teams[k].players||[]).find(x=>x.id===id); if(p) return p.name; }
+  return id||'';
+}
+
+/* ============================ Scoring engine ============================
+   A match doc:
+   { id, venue, date, status:'setup'|'live'|'done', createdAt,
+     leagueId:string|null, seasonId:string|null, seasonName,  // null => shown on the front page
+     teams:{A:{name,players:[{id,name}]}, B:{name,players:[{id,name}]}},
+     oversPerInnings,
+     currentInnings:0|1,
+     innings:[ inn, inn ],  // inn added when set up
+     result }
+   // Everything below references players by their stable {id}; names are display-only.
+   inn = { batting:'A'|'B', bowling:'A'|'B', overs,
+           strikerInit, nonStrikerInit, deliveries:[d...] , closed:bool }   // *Init are player ids
+   d  = { bowler, runs, extra:null|'wide'|'noball', wicket:null|{type, out:'striker'|'nonstriker', catcher}, newBatsman }
+   //   bowler / newBatsman / wicket.catcher are player ids
+=================================================================== */
+
+// Derive full live state of an innings from its deliveries.
+function derive(match, inn){
+  const battingPlayers = match.teams[inn.batting].players; // [{id,name}]
+  const bat={}, bowl={};   // keyed by player id
+  const ensureBat=id=>{ if(id && !bat[id]) bat[id]={id,name:pName(match,id),runs:0,balls:0,fours:0,sixes:0,out:null}; };
+  const ensureBowl=id=>{ if(id && !bowl[id]) bowl[id]={id,name:pName(match,id),balls:0,runs:0,wkts:0}; };
+  let total=0, wickets=0, legalBalls=0, extrasTotal=0;
+  let striker=inn.strikerInit, nonStriker=inn.nonStrikerInit;
+  let ballInOver=0;
+  const timeline=[]; // per current-over display
+  ensureBat(striker); ensureBat(nonStriker);
+  const swap=()=>{ const t=striker; striker=nonStriker; nonStriker=t; };
+
+  for(const d of inn.deliveries){
+    ensureBowl(d.bowler);
+    ensureBat(striker); ensureBat(nonStriker);
+    const b=bowl[d.bowler];
+    if(d.extra==='wide'){
+      total+=1; extrasTotal+=1; b.runs+=1;
+      timeline.push({t:'Wd',cls:'ex'});
+      continue; // no ball faced, no strike change (MVP)
+    }
+    if(d.extra==='noball'){
+      total+=1; extrasTotal+=1; b.runs+=1 + (d.runs||0);
+      total+=(d.runs||0);
+      if(d.runs){ bat[striker].runs+=d.runs; }
+      timeline.push({t:'Nb'+(d.runs? '+'+d.runs:''),cls:'ex'});
+      if((d.runs||0)%2===1) swap();
+      continue; // rebowled, not a legal ball
+    }
+    // legal delivery
+    const r=d.runs||0;
+    bat[striker].runs+=r; bat[striker].balls+=1;
+    if(r===4) bat[striker].fours++; if(r===6) bat[striker].sixes++;
+    total+=r; b.runs+=r; b.balls+=1; legalBalls++; ballInOver++;
+
+    if(d.wicket){
+      wickets++;
+      const outWho = d.wicket.out==='nonstriker' ? 'nonStriker':'striker';
+      const outName = outWho==='striker'? striker : nonStriker;
+      let how = d.wicket.type;
+      bat[outName].out = { type:how, catcher:d.wicket.catcher||null, bowler:d.bowler };
+      if(how!=='run out') b.wkts++;
+      // bring in new batsman to the vacated end
+      if(outWho==='striker') striker = d.newBatsman; else nonStriker = d.newBatsman;
+      ensureBat(striker); ensureBat(nonStriker);
+      timeline.push({t:'W',cls:'w'});
+    }else{
+      if(r%2===1) swap();
+      timeline.push({t:String(r), cls: r===4?'four': r===6?'six': ''});
+    }
+    if(ballInOver===6){ ballInOver=0; swap(); }
+  }
+
+  const allOut = wickets >= (battingPlayers.length-1);
+  const oversDone = legalBalls >= inn.overs*6;
+  const complete = inn.closed || allOut || oversDone;
+  // current bowler = bowler of the last delivery of the in-progress over
+  let curBowler=null;
+  if(ballInOver>0){ // find bowler of current over
+    for(let i=inn.deliveries.length-1;i>=0;i--){ if(inn.deliveries[i].extra!=='wide'){ curBowler=inn.deliveries[i].bowler; break; } }
+    if(!curBowler && inn.deliveries.length) curBowler=inn.deliveries[inn.deliveries.length-1].bowler;
+  }
+  const awaitingBowler = !complete && ballInOver===0; // need a bowler chosen for next ball
+  // last bowler (can't bowl consecutive overs)
+  let lastOverBowler=null;
+  if(inn.deliveries.length){
+    // walk back to find the bowler of the previous completed over
+    lastOverBowler = inn.deliveries[inn.deliveries.length-1].bowler;
+  }
+  return {bat,bowl,total,wickets,legalBalls,extrasTotal,striker,nonStriker,ballInOver,
+          curBowler,lastOverBowler,complete,allOut,oversDone,timeline,battingPlayers};
+}
+
+function oversStr(legalBalls){ return `${Math.floor(legalBalls/6)}.${legalBalls%6}`; }
+function rr(total,legalBalls){ return legalBalls? (total/(legalBalls/6)).toFixed(2):'0.00'; }
+
+/* ============================ Persistence ============================ */
+async function saveMatch(m){
+  m.updatedAt = Date.now();
+  await COL().doc(m.id).set(m);
+}
+
+/* ============================ Router ============================ */
+let unsub=null, unsub2=null;
+function unsubscribe(){ if(unsub){ unsub(); unsub=null; } if(unsub2){ unsub2(); unsub2=null; } }
+
+window.addEventListener('hashchange', route);
+window.addEventListener('load', route);
+
+function route(){
+  if(!FIREBASE_OK){ return renderNoConfig(); }
+  unsubscribe();
+  const h=location.hash||'#/';
+  const parts=h.slice(2).split('/');
+  if(parts[0]===''){ return renderHome(); }
+  if(parts[0]==='league'){ return renderLeague(parts[1]); }
+  if(parts[0]==='season'){ return renderSeason(parts[1]); }
+  if(parts[0]==='newmatch'){ return renderNew(parts[1]); }
+  if(parts[0]==='match'){ return renderMatch(parts[1]); }
+  if(parts[0]==='teams'){ return renderTeams(); }
+  if(parts[0]==='team'){ return renderTeamView(parts[1]); }
+  if(parts[0]==='player'){ return renderPlayer(parts[1]); }
+  if(parts[0]==='practices'){ return renderPractices(); }
+  if(parts[0]==='newpractice'){ return renderNewPractice(); }
+  if(parts[0]==='practice'){ return renderPractice(parts[1]); }
+  renderHome();
+}
+const TEAMCOL = ()=> db.collection('teams');
+const LEAGUECOL = ()=> db.collection('leagues');
+const SEASONCOL = ()=> db.collection('seasons');
+const PRACTICECOL = ()=> db.collection('practices');
+
+async function getLeague(id){ if(!id) return null; const d=await LEAGUECOL().doc(id).get(); return d.exists?{id:d.id,...d.data()}:null; }
+
+function renderNoConfig(){
+  app.innerHTML=`<div class="card">
+    <h2>⚙️ One-time setup needed</h2>
+    <p class="muted">Open <b>firebase-config.js</b> and paste your Firebase project's web config.
+    Full steps are in <b>README.md</b> (takes ~5 minutes, all free).</p>
+    <p class="small muted">Once configured and deployed, share the link with your team — one person scores, everyone else watches live.</p>
+  </div>`;
+}
+
+/* ============================ Home (front page) ============================ */
+function matchRowHTML(m){
+  const inn=m.innings&&m.innings[m.currentInnings||0];
+  let sub = m.status==='live'&&inn ? (()=>{const s=derive(m,inn);return `${m.teams[inn.batting].name} ${s.total}/${s.wickets} (${oversStr(s.legalBalls)})`;})()
+          : m.status==='done' ? (m.result||'Completed') : 'Not started';
+  const pill = m.status==='live'?'<span class="pill live">● LIVE</span>':
+               m.status==='done'?'<span class="pill done">DONE</span>':'<span class="pill setup">SETUP</span>';
+  return `<div class="matchrow" onclick="go('#/match/${m.id}')">
+    <div style="flex:1">
+      <div><b>${esc(m.teams.A.name)}</b> vs <b>${esc(m.teams.B.name)}</b> ${pill}</div>
+      <div class="small muted">${esc(m.venue||'')} · ${esc(m.date||'')}</div>
+      <div class="small">${esc(sub)}</div>
+    </div>
+    <button class="btn sm ghost" title="Delete match" onclick="event.stopPropagation();deleteMatch('${m.id}')">🗑</button>
+  </div>`;
+}
+function renderHome(){
+  app.innerHTML=`
+    <button class="btn primary" style="width:100%;font-size:17px;padding:14px" onclick="go('#/newmatch')">＋ New Match</button>
+    <button class="btn ghost" style="width:100%;margin-top:8px" onclick="go('#/teams')">👥 Teams &amp; Player stats</button>
+    <button class="btn ghost" style="width:100%;margin-top:8px" onclick="go('#/practices')">🥎 Practice (no teams)</button>
+    <div class="card"><h3 style="margin:0 0 6px">Matches</h3><div id="freeMatches" class="muted small">Loading…</div></div>
+    <div class="card"><h3 style="margin:0 0 6px">Leagues</h3><div id="list" class="muted small">Loading…</div></div>
+    <div id="gallery" class="gallery"></div>`;
+  fillGallery();
+  // leagueless matches — shown right on the front page
+  unsub2 = COL().where('leagueId','==',null).onSnapshot(snap=>{
+    if(snap.empty){ $('freeMatches').innerHTML='No standalone matches. Create one and choose “No league”.'; return; }
+    const ms=snap.docs.map(d=>d.data()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    $('freeMatches').innerHTML=ms.map(matchRowHTML).join('');
+  }, err=>{ $('freeMatches').innerHTML='Error: '+esc(err.message); });
+  // leagues
+  unsub = LEAGUECOL().orderBy('name').onSnapshot(snap=>{
+    if(snap.empty){ $('list').innerHTML='No leagues yet. Create a match and add a league.'; return; }
+    let html='';
+    snap.forEach(doc=>{ const lg=doc.data();
+      html+=`<div class="matchrow" onclick="go('#/league/${doc.id}')">
+        <div style="flex:1"><b>${esc(lg.name)}</b></div><div class="muted">›</div></div>`; });
+    $('list').innerHTML=html;
+  }, err=>{ $('list').innerHTML='Error: '+esc(err.message); });
+}
+
+/* ---------- League view (seasons) ---------- */
+async function renderLeague(id){
+  app.innerHTML='<div class="muted">Loading league…</div>';
+  const lg=await getLeague(id);
+  if(!lg){ app.innerHTML='<div class="card">League not found. <a onclick="go(\'#/\')">Home</a></div>'; return; }
+  app.innerHTML=`<button class="btn ghost sm" onclick="go('#/')">← Home</button>
+    <div class="card"><div style="display:flex;align-items:center;gap:8px">
+      <h2 style="margin:0;flex:1">${esc(lg.name)}</h2>
+      <button class="btn sm ghost" title="Delete league" onclick="deleteLeague('${id}')">🗑</button></div></div>
+    <button class="btn primary" style="width:100%" onclick="go('#/newmatch/${id}')">＋ New Match</button>
+    <div class="card"><h3 style="margin:0 0 6px">Seasons</h3><div id="seasons" class="muted small">Loading…</div></div>`;
+  unsub=SEASONCOL().where('leagueId','==',id).onSnapshot(snap=>{
+    const seasons=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    if(!seasons.length){ $('seasons').innerHTML='No seasons yet — create a match to start one.'; return; }
+    $('seasons').innerHTML=seasons.map(s=>`<div class="matchrow" onclick="go('#/season/${s.id}')">
+      <div style="flex:1"><b>${esc(s.name)}</b></div><div class="muted">›</div></div>`).join('');
+  }, err=>{ $('seasons').innerHTML='Error: '+esc(err.message); });
+}
+async function deleteLeague(id){
+  const seasons=await SEASONCOL().where('leagueId','==',id).get();
+  if(!seasons.empty){ toast('Delete its seasons first'); return; }
+  $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+    <h3 style="margin-top:0">Delete this league?</h3>
+    <p class="muted">Only empty leagues can be deleted. This can't be undone.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" onclick="__deleteLeagueOk('${id}')">Delete</button>
+    </div></div></div>`;
+}
+function __deleteLeagueOk(id){
+  LEAGUECOL().doc(id).delete().then(()=>{ closeModal(); toast('League deleted'); go('#/'); })
+    .catch(e=>toast('Delete failed: '+e.message));
+}
+
+/* ---------- Season view (matches) ---------- */
+async function renderSeason(id){
+  app.innerHTML='<div class="muted">Loading season…</div>';
+  const sDoc=await SEASONCOL().doc(id).get();
+  if(!sDoc.exists){ app.innerHTML='<div class="card">Season not found. <a onclick="go(\'#/\')">Home</a></div>'; return; }
+  const season={id, ...sDoc.data()};
+  const lg=await getLeague(season.leagueId);
+  app.innerHTML=`<button class="btn ghost sm" onclick="go('#/league/${season.leagueId}')">← ${esc(lg?lg.name:'League')}</button>
+    <div class="card"><div style="display:flex;align-items:center;gap:8px">
+      <div style="flex:1"><h2 style="margin:0">${esc(season.name)}</h2><div class="small muted">${esc(lg?lg.name:'')}</div></div>
+      <button class="btn sm ghost" title="Delete season" onclick="deleteSeason('${id}','${season.leagueId}')">🗑</button></div></div>
+    <button class="btn primary" style="width:100%" onclick="go('#/newmatch/${season.leagueId}')">＋ New Match</button>
+    <div class="card"><h3 style="margin:0 0 6px">Matches</h3><div id="list" class="muted small">Loading…</div></div>`;
+  unsub=COL().where('seasonId','==',id).onSnapshot(snap=>{
+    if(snap.empty){ $('list').innerHTML='No matches yet. Create one to start scoring.'; return; }
+    const ms=snap.docs.map(d=>d.data()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    $('list').innerHTML=ms.map(m=>{
+      const inn=m.innings&&m.innings[m.currentInnings||0];
+      let sub = m.status==='live'&&inn ? (()=>{const s=derive(m,inn);return `${m.teams[inn.batting].name} ${s.total}/${s.wickets} (${oversStr(s.legalBalls)})`;})()
+              : m.status==='done' ? (m.result||'Completed') : 'Not started';
+      const pill = m.status==='live'?'<span class="pill live">● LIVE</span>':
+                   m.status==='done'?'<span class="pill done">DONE</span>':'<span class="pill setup">SETUP</span>';
+      return `<div class="matchrow" onclick="go('#/match/${m.id}')">
+        <div style="flex:1">
+          <div><b>${esc(m.teams.A.name)}</b> vs <b>${esc(m.teams.B.name)}</b> ${pill}</div>
+          <div class="small muted">${esc(m.venue||'')} · ${esc(m.date||'')}</div>
+          <div class="small">${esc(sub)}</div>
+        </div>
+        <button class="btn sm ghost" title="Delete match" onclick="event.stopPropagation();deleteMatch('${m.id}')">🗑</button>
+      </div>`;
+    }).join('');
+  }, err=>{ $('list').innerHTML='Error: '+esc(err.message); });
+}
+async function deleteSeason(id, leagueId){
+  const has=await COL().where('seasonId','==',id).get();
+  if(!has.empty){ toast('Delete its matches first'); return; }
+  $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+    <h3 style="margin-top:0">Delete this season?</h3>
+    <p class="muted">Only empty seasons can be deleted. This can't be undone.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" onclick="__deleteSeasonOk('${id}','${leagueId}')">Delete</button>
+    </div></div></div>`;
+}
+function __deleteSeasonOk(id, leagueId){
+  SEASONCOL().doc(id).delete().then(()=>{ closeModal(); toast('Season deleted'); go('#/league/'+leagueId); })
+    .catch(e=>toast('Delete failed: '+e.message));
+}
+
+/* ---------- Delete a match ---------- */
+function deleteMatch(id){
+  $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+    <h3 style="margin-top:0">Delete this match?</h3>
+    <p class="muted">Permanently removes the match and its scorecard. This can't be undone.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" onclick="__deleteMatchOk('${id}')">Delete</button>
+    </div></div></div>`;
+}
+function __deleteMatchOk(id){
+  COL().doc(id).delete().then(()=>{ closeModal(); toast('Match deleted'); })
+    .catch(e=>toast('Delete failed: '+e.message));
+}
+
+/* ============================ Team / player registry ============================
+   teams/{slug} = { name, players:[{id,name}], updatedAt }
+   Player ids are stable across matches -> career stats aggregate by id.
+=================================================================================== */
+function teamSlug(name){ return 'team_'+(name||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
+function editDist(a,b){ // small Levenshtein for "did you mean"
+  const m=a.length,n=b.length; if(!m)return n; if(!n)return m;
+  const dp=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]);
+  for(let j=1;j<=n;j++) dp[0][j]=j;
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)
+    dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+  return dp[m][n];
+}
+async function loadAllTeams(){
+  const snap=await TEAMCOL().orderBy('name').get();
+  return snap.docs.map(d=>({slug:d.id, ...d.data()}));
+}
+// Merge a match squad into the persistent team roster; assign stable ids to new players.
+async function upsertTeam(name, squad){
+  const ref=TEAMCOL().doc(teamSlug(name));
+  const snap=await ref.get();
+  const roster = snap.exists ? (snap.data().players||[]).slice() : [];
+  const byName=new Map(roster.map(p=>[p.name.toLowerCase(),p]));
+  const out=[];
+  for(const p of squad){
+    let id=p.id;
+    if(!id){
+      const ex=byName.get(p.name.toLowerCase());
+      if(ex){ id=ex.id; }
+      else { id=uid(); const np={id,name:p.name}; roster.push(np); byName.set(p.name.toLowerCase(),np); }
+    }
+    out.push({id, name:p.name});
+  }
+  await ref.set({name, players:roster, updatedAt:Date.now()}, {merge:true});
+  return out;
+}
+
+/* ============================ New match ============================ */
+let draft=null, TEAMS=[], focusAdd=null;
+function teamByName(name){ const k=(name||'').trim().toLowerCase(); return TEAMS.find(t=>t.name.toLowerCase()===k); }
+let LEAGUES=[];
+function seasonYear(d){ return (d.date||todayStr()).slice(0,4); }
+async function renderNew(preLeagueId){
+  app.innerHTML='<div class="muted">Loading…</div>';
+  try{ LEAGUES=(await LEAGUECOL().orderBy('name').get()).docs.map(d=>({id:d.id,...d.data()})); }catch(e){ LEAGUES=[]; }
+  try{ TEAMS=await loadAllTeams(); }catch(e){ TEAMS=[]; }
+  const hasLeagues=LEAGUES.length>0;
+  draft={venue:'',date:todayStr(),overs:20,
+         leagueMode: preLeagueId?'existing':'none',
+         leagueId: preLeagueId || (hasLeagues?LEAGUES[0].id:''),
+         newLeagueName:'',
+         A:{name:'',squad:[],hint:null,pendingName:null},
+         B:{name:'',squad:[],hint:null,pendingName:null}};
+  drawNew();
+}
+function onLeagueSelect(v){
+  if(v==='__none'){ draft.leagueMode='none'; }
+  else if(v==='__new'){ draft.leagueMode='new'; }
+  else { draft.leagueMode='existing'; draft.leagueId=v; }
+  drawNew();
+}
+function leagueSection(){
+  const opts=LEAGUES.map(l=>`<option value="${l.id}" ${draft.leagueMode==='existing'&&draft.leagueId===l.id?'selected':''}>${esc(l.name)}</option>`).join('');
+  return `<label>League</label>
+    <select onchange="onLeagueSelect(this.value)">
+      <option value="__none" ${draft.leagueMode==='none'?'selected':''}>No league — show on front page</option>
+      ${opts}
+      <option value="__new" ${draft.leagueMode==='new'?'selected':''}>➕ Create new league…</option>
+    </select>
+    ${draft.leagueMode==='new'?`
+      <label>New league name</label><input value="${esc(draft.newLeagueName)}" oninput="draft.newLeagueName=this.value" placeholder="e.g. Sunday League">`:''}
+    ${draft.leagueMode==='none'
+      ? `<div class="small muted" style="margin-top:6px">This match won't belong to a league — it'll appear directly on the front page.</div>`
+      : `<div class="small muted" style="margin-top:6px">Season: <b>${esc(seasonYear(draft))}</b> — picked automatically from the match year (created if it doesn't exist).</div>`}`;
+}
+function drawNew(){
+  const teamNames=TEAMS.map(t=>`<option value="${esc(t.name)}">`).join('');
+  app.innerHTML=`<button class="btn ghost sm" onclick="draft=null;go('#/')">← Home</button>
+    <div class="card">
+    <h2 style="margin-top:0">New Match</h2>
+    <datalist id="teamnames">${teamNames}</datalist>
+    ${leagueSection()}
+    <label>Venue</label><input value="${esc(draft.venue)}" oninput="draft.venue=this.value" placeholder="e.g. Riverside Ground">
+    <label>Date</label><input type="date" value="${esc(draft.date)}" oninput="draft.date=this.value" onchange="drawNew()">
+    ${teamBlock('A')}
+    ${teamBlock('B')}
+    <label>Overs per innings</label><input type="number" min="1" value="${draft.overs}" oninput="draft.overs=this.value">
+    <p class="small muted">Type a known team name to pull up its players. New names are saved to the team for next time.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" onclick="draft=null;go('#/')">Cancel</button>
+      <button class="btn primary" onclick="createMatch()">Create →</button>
+    </div>
+  </div>`;
+  if(focusAdd){ const el=$('add_'+focusAdd); if(el){ el.focus(); } focusAdd=null; }
+}
+function teamBlock(key){
+  const t=draft[key];
+  const reg=teamByName(t.name);
+  const inSquad=new Set(t.squad.map(p=>p.name.toLowerCase()));
+  const rosterChips = reg ? reg.players.filter(p=>!inSquad.has(p.name.toLowerCase()))
+      .map(p=>`<div class="chip" onclick="addFromRoster('${key}','${p.id}')">+ ${esc(p.name)}</div>`).join('') : '';
+  const squadChips = t.squad.length
+      ? t.squad.map((p,i)=>`<div class="chip sel">${esc(p.name)}<span onclick="removeSquad('${key}',${i})" style="margin-left:6px;cursor:pointer">×</span></div>`).join('')
+      : '<span class="small muted">No players added yet</span>';
+  return `<div class="card" style="background:var(--card2);margin-top:12px">
+    <label>Team ${key} name</label>
+    <input list="teamnames" value="${esc(t.name)}" oninput="draft.${key}.name=this.value" onchange="drawNew()" placeholder="${key==='A'?'Team A':'Team B'}">
+    <label>Playing today (${t.squad.length})</label>
+    <div class="chips">${squadChips}</div>
+    ${reg&&rosterChips?`<div class="small muted" style="margin-top:8px">Tap to add from ${esc(reg.name)}:</div><div class="chips">${rosterChips}</div>`:''}
+    <div class="row" style="margin-top:8px">
+      <input id="add_${key}" placeholder="Add a player…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTyped('${key}')}">
+      <button class="btn sm" style="flex:0 0 auto" onclick="addTyped('${key}')">Add</button>
+    </div>
+    ${t.hint?`<div class="small" style="margin-top:8px;color:var(--warn)">${t.hint}</div>`:''}
+  </div>`;
+}
+function addFromRoster(key,pid){
+  const reg=teamByName(draft[key].name); if(!reg) return;
+  const p=reg.players.find(x=>x.id===pid); if(!p) return;
+  if(draft[key].squad.some(s=>s.name.toLowerCase()===p.name.toLowerCase())) return;
+  draft[key].squad.push({id:p.id,name:p.name}); draft[key].hint=null; drawNew();
+}
+function removeSquad(key,i){ draft[key].squad.splice(i,1); drawNew(); }
+function addTyped(key){
+  const el=$('add_'+key); const name=(el?el.value:'').trim(); if(!name) return;
+  const t=draft[key];
+  if(t.squad.some(s=>s.name.toLowerCase()===name.toLowerCase())){ toast('Already added'); if(el) el.value=''; return; }
+  const reg=teamByName(t.name);
+  if(reg){
+    const exact=reg.players.find(p=>p.name.toLowerCase()===name.toLowerCase());
+    if(exact){ t.squad.push({id:exact.id,name:exact.name}); t.hint=null; focusAdd=key; return drawNew(); }
+    const near=reg.players.find(p=>editDist(p.name.toLowerCase(),name.toLowerCase())<=1);
+    if(near){
+      t.pendingName=name;
+      t.hint=`Did you mean <b>${esc(near.name)}</b>? `+
+        `<a onclick="useNear('${key}','${near.id}')">Use ${esc(near.name)}</a> &nbsp;·&nbsp; `+
+        `<a onclick="addNewTyped('${key}')">Add as new player</a>`;
+      return drawNew();
+    }
+  }
+  t.squad.push({id:null,name}); t.hint=null; focusAdd=key; drawNew();
+}
+function useNear(key,pid){
+  const reg=teamByName(draft[key].name); const p=reg&&reg.players.find(x=>x.id===pid);
+  if(p) draft[key].squad.push({id:p.id,name:p.name});
+  draft[key].hint=null; draft[key].pendingName=null; focusAdd=key; drawNew();
+}
+function addNewTyped(key){
+  const t=draft[key]; if(t.pendingName) t.squad.push({id:null,name:t.pendingName});
+  t.hint=null; t.pendingName=null; focusAdd=key; drawNew();
+}
+// Find an existing season for this league+year, or create one.
+async function resolveSeason(leagueId, year){
+  const seasons=(await SEASONCOL().where('leagueId','==',leagueId).get()).docs.map(x=>({id:x.id,...x.data()}));
+  const found=seasons.find(s=> String(s.year)===String(year) || (s.name&&String(s.name).includes(String(year))));
+  if(found) return {id:found.id, name:found.name};
+  const id='season_'+uid();
+  await SEASONCOL().doc(id).set({leagueId, name:String(year), year:Number(year), createdAt:Date.now()});
+  return {id, name:String(year)};
+}
+async function createMatch(){
+  const d=draft; const aN=(d.A.name||'').trim(), bN=(d.B.name||'').trim();
+  if(!aN||!bN){ toast('Enter both team names'); return; }
+  if(aN.toLowerCase()===bN.toLowerCase()){ toast('Teams need different names'); return; }
+  if(d.A.squad.length<2||d.B.squad.length<2){ toast('Add at least 2 players per team'); return; }
+  try{
+    // resolve league: none (front page), existing, or newly created
+    let leagueId=null, seasonId=null, seasonName=null;
+    if(d.leagueMode==='none'){
+      leagueId=null; // leagueless — appears on the front page
+    } else {
+      if(d.leagueMode==='new'){
+        const nm=(d.newLeagueName||'').trim();
+        if(!nm){ toast('Enter the new league name'); return; }
+        leagueId='league_'+uid();
+        await LEAGUECOL().doc(leagueId).set({name:nm, createdAt:Date.now()});
+      } else {
+        leagueId=d.leagueId;
+        if(!leagueId){ toast('Pick a league'); return; }
+      }
+      const year=(d.date||todayStr()).slice(0,4);
+      const season=await resolveSeason(leagueId, year);
+      seasonId=season.id; seasonName=season.name;
+    }
+    const A=await upsertTeam(aN, d.A.squad);
+    const B=await upsertTeam(bN, d.B.squad);
+    const m={
+      id:uid(), venue:(d.venue||'').trim(), date:d.date||todayStr(),
+      status:'setup', createdAt:Date.now(),
+      leagueId, seasonId, seasonName,
+      teams:{A:{name:aN,players:A}, B:{name:bN,players:B}},
+      oversPerInnings:Math.max(1,parseInt(d.overs)||20),
+      currentInnings:0, innings:[], result:'',
+      playerIds:[...A,...B].map(p=>p.id)
+    };
+    await saveMatch(m); draft=null; go('#/match/'+m.id);
+  }catch(e){ toast('Save failed: '+e.message); }
+}
+
+/* ============================ Cross-match aggregation ============================ */
+// Win/loss record for a team (from completed matches only).
+function teamRecord(name, matches){
+  const k=(name||'').toLowerCase(); let played=0,won=0,tied=0;
+  for(const m of matches){
+    if(m.status!=='done') continue;
+    const inA=m.teams&&m.teams.A&&m.teams.A.name.toLowerCase()===k;
+    const inB=m.teams&&m.teams.B&&m.teams.B.name.toLowerCase()===k;
+    if(!inA&&!inB) continue;
+    played++;
+    const r=(m.result||'');
+    if(/^match tied/i.test(r)) tied++;
+    else if(r.toLowerCase().startsWith(k+' won')) won++;
+  }
+  return {played, won, tied, lost:played-won-tied};
+}
+// One pass over all matches -> per-player totals keyed by stable id.
+function aggregateAllPlayers(matches){
+  const map={};
+  const get=(id,name)=> map[id]||(map[id]={id,name:name||id,runs:0,balls:0,wkts:0,catches:0,inns:0});
+  for(const m of matches){
+    for(const k of ['A','B']) ((m.teams&&m.teams[k]&&m.teams[k].players)||[]).forEach(p=>get(p.id,p.name));
+    (m.innings||[]).forEach(inn=>{
+      let s; try{ s=derive(m,inn); }catch(e){ return; }
+      Object.values(s.bat).forEach(b=>{ if(b.balls>0||b.out){ const e=get(b.id,b.name); e.runs+=b.runs; e.balls+=b.balls; e.inns++; } });
+      Object.values(s.bowl).forEach(b=>{ if(b.balls>0){ const e=get(b.id,b.name); e.wkts+=b.wkts; } });
+      (inn.deliveries||[]).forEach(d=>{ if(d.wicket&&d.wicket.type==='caught'&&d.wicket.catcher){ get(d.wicket.catcher, pName(m,d.wicket.catcher)).catches++; } });
+    });
+  }
+  return map;
+}
+function leaderboardHTML(matches){
+  const arr=Object.values(aggregateAllPlayers(matches));
+  const top=(key)=> arr.filter(p=>p[key]>0).sort((a,b)=> b[key]-a[key] || (b.runs-a.runs)).slice(0,5);
+  const rowsFor=(rows,key)=> rows.length
+    ? rows.map(p=>`<div class="matchrow" onclick="go('#/player/${p.id}')">
+        <div style="flex:1">${esc(p.name)}</div><div style="text-align:right;min-width:40px"><b>${p[key]}</b></div></div>`).join('')
+    : '<span class="small muted">No data yet.</span>';
+  return `<div class="card"><h3 style="margin-top:0">🏆 Leaderboard</h3>
+    <h4 style="margin:12px 0 2px">Most runs</h4>${rowsFor(top('runs'),'runs')}
+    <h4 style="margin:12px 0 2px">Most wickets</h4>${rowsFor(top('wkts'),'wkts')}
+    <h4 style="margin:12px 0 2px">Most catches</h4>${rowsFor(top('catches'),'catches')}</div>`;
+}
+
+/* ============================ Teams list ============================ */
+function renderTeams(){
+  app.innerHTML=`<button class="btn ghost sm" onclick="go('#/')">← Home</button>
+    <div class="card"><h2 style="margin:0 0 6px">Teams</h2>
+    <div class="small muted">Created automatically from matches. Tap a team to see players &amp; stats.</div>
+    <div id="tlist" class="muted small" style="margin-top:8px">Loading…</div></div>
+    <div id="lb"></div>`;
+  COL().get().then(snap=>{ $('lb').innerHTML=leaderboardHTML(snap.docs.map(d=>d.data())); }).catch(()=>{});
+  unsub=TEAMCOL().orderBy('name').onSnapshot(snap=>{
+    if(snap.empty){ $('tlist').innerHTML='No teams yet — set up a match to create them.'; return; }
+    let h='';
+    snap.forEach(doc=>{ const t=doc.data();
+      h+=`<div class="matchrow" onclick="go('#/team/${doc.id}')">
+        <div style="flex:1"><b>${esc(t.name)}</b><div class="small muted">${(t.players||[]).length} players</div></div>
+        <div class="muted">›</div></div>`; });
+    $('tlist').innerHTML=h;
+  }, err=>{ $('tlist').innerHTML='Error: '+esc(err.message); });
+}
+
+/* ============================ Team view ============================ */
+async function renderTeamView(slug){
+  app.innerHTML='<div class="muted">Loading team…</div>';
+  let matches=[];
+  try{ const snap=await COL().get(); matches=snap.docs.map(d=>d.data()); }catch(e){}
+  unsub=TEAMCOL().doc(slug).onSnapshot(doc=>{
+    if(!doc.exists){ app.innerHTML='<div class="card">Team not found. <a onclick="go(\'#/teams\')">All teams</a></div>'; return; }
+    const t=doc.data(); const players=(t.players||[]).slice().sort((a,b)=>a.name.localeCompare(b.name));
+    const rec=teamRecord(t.name, matches);
+    const recLine=`Played <b>${rec.played}</b> · Won <b>${rec.won}</b> · Lost <b>${rec.lost}</b>${rec.tied?` · Tied <b>${rec.tied}</b>`:''}`;
+    const rows = players.length ? players.map(p=>`<div class="matchrow">
+        <div style="flex:1;cursor:pointer" onclick="go('#/player/${p.id}')"><b>${esc(p.name)}</b><div class="small muted">tap for career stats ›</div></div>
+        <button class="btn sm ghost" title="Remove from team" onclick="deleteTeamPlayer('${slug}','${p.id}')">🗑</button>
+      </div>`).join('') : '<span class="small muted">No players.</span>';
+    app.innerHTML=`<button class="btn ghost sm" onclick="go('#/teams')">← Teams</button>
+      <div class="card"><div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1"><h2 style="margin:0">${esc(t.name)}</h2><div class="small muted">${players.length} players</div></div>
+        <button class="btn sm ghost" title="Delete team" onclick="deleteTeam('${slug}')">🗑</button></div>
+      <div class="small" style="margin-top:6px">${recLine}</div>
+      <div style="margin-top:8px">${rows}</div>
+      <div class="row" style="margin-top:12px">
+        <input id="newp" placeholder="Add a player…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTeamPlayer('${slug}')}">
+        <button class="btn sm" style="flex:0 0 auto" onclick="addTeamPlayer('${slug}')">Add</button>
+      </div></div>`;
+  }, err=>{ app.innerHTML='<div class="card">Error: '+esc(err.message)+'</div>'; });
+}
+function addTeamPlayer(slug){
+  const el=$('newp'); const name=(el?el.value:'').trim(); if(!name) return;
+  TEAMCOL().doc(slug).get().then(doc=>{
+    if(!doc.exists) return;
+    const players=(doc.data().players||[]).slice();
+    if(players.some(p=>p.name.toLowerCase()===name.toLowerCase())){ toast('Already in team'); return; }
+    players.push({id:uid(),name});
+    TEAMCOL().doc(slug).set({players},{merge:true}).then(()=>toast('Added'));
+  });
+}
+// Teams/players are unprotected — a plain confirm, no PIN, no admin prompt.
+function deleteTeamPlayer(slug,pid){
+  $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+    <h3 style="margin-top:0">Remove player from team?</h3>
+    <p class="muted">Removed from this team's roster. Their stats from past matches are kept.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" onclick="__delPlayerOk('${slug}','${pid}')">Remove</button>
+    </div></div></div>`;
+}
+function __delPlayerOk(slug,pid){
+  TEAMCOL().doc(slug).get().then(doc=>{
+    const players=(doc.data().players||[]).filter(p=>p.id!==pid);
+    TEAMCOL().doc(slug).set({players},{merge:true}).then(()=>{ closeModal(); toast('Removed'); });
+  });
+}
+function deleteTeam(slug){
+  $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+    <h3 style="margin-top:0">Delete this team?</h3>
+    <p class="muted">Removes the team and its roster from Teams. Past matches (and their stats) are kept.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" onclick="__deleteTeamOk('${slug}')">Delete</button>
+    </div></div></div>`;
+}
+function __deleteTeamOk(slug){
+  TEAMCOL().doc(slug).delete().then(()=>{ closeModal(); toast('Team deleted'); go('#/teams'); })
+    .catch(e=>toast('Delete failed: '+e.message));
+}
+
+/* ============================ Player view (career stats) ============================ */
+function computePlayerStats(pid, matches){
+  const bat={inns:0,runs:0,balls:0,fours:0,sixes:0,outs:0,no:0,hs:0,hsNO:false};
+  const bowl={balls:0,runs:0,wkts:0,bestW:-1,bestR:0};
+  const field={catches:0};
+  let name=''; const played=[];
+  for(const m of matches){
+    let pname='';
+    for(const k of ['A','B']){ const p=(m.teams&&m.teams[k]&&m.teams[k].players||[]).find(x=>x.id===pid); if(p) pname=p.name; }
+    if(!pname) continue;
+    if(!name) name=pname;
+    played.push({id:m.id, label:`${m.teams.A.name} vs ${m.teams.B.name}`, date:m.date||'', result:m.result||''});
+    (m.innings||[]).forEach(inn=>{
+      let s; try{ s=derive(m,inn); }catch(e){ return; }
+      const b=s.bat[pid];
+      if(b && (b.balls>0 || b.out)){
+        bat.inns++; bat.runs+=b.runs; bat.balls+=b.balls; bat.fours+=b.fours; bat.sixes+=b.sixes;
+        if(b.out) bat.outs++; else bat.no++;
+        if(b.runs>bat.hs){ bat.hs=b.runs; bat.hsNO=!b.out; }
+        else if(b.runs===bat.hs && !b.out){ bat.hsNO=true; }
+      }
+      const bo=s.bowl[pid];
+      if(bo && bo.balls>0){
+        bowl.balls+=bo.balls; bowl.runs+=bo.runs; bowl.wkts+=bo.wkts;
+        if(bo.wkts>bowl.bestW || (bo.wkts===bowl.bestW && bo.runs<bowl.bestR)){ bowl.bestW=bo.wkts; bowl.bestR=bo.runs; }
+      }
+      (inn.deliveries||[]).forEach(d=>{ if(d.wicket && d.wicket.type==='caught' && d.wicket.catcher===pid) field.catches++; });
+    });
+  }
+  bat.avg = bat.outs? (bat.runs/bat.outs).toFixed(1) : '—';
+  bat.sr  = bat.balls? (bat.runs/bat.balls*100).toFixed(1) : '—';
+  bowl.econ = bowl.balls? (bowl.runs/(bowl.balls/6)).toFixed(1) : '—';
+  bowl.avg  = bowl.wkts? (bowl.runs/bowl.wkts).toFixed(1) : '—';
+  bowl.best = bowl.bestW>=0? `${bowl.bestW}/${bowl.bestR}` : '—';
+  return {name, matches:played.length, played, bat, bowl, field};
+}
+async function renderPlayer(pid){
+  app.innerHTML='<div class="muted">Loading player…</div>';
+  let matches=[];
+  try{ const snap=await COL().get(); matches=snap.docs.map(d=>d.data()); }
+  catch(e){ app.innerHTML='<div class="card">Error: '+esc(e.message)+'</div>'; return; }
+  const st=computePlayerStats(pid, matches);
+  if(!st.name){ app.innerHTML=`<button class="btn ghost sm" onclick="go('#/teams')">← Teams</button><div class="card">No matches recorded for this player yet.</div>`; return; }
+  const b=st.bat, bo=st.bowl;
+  const cell=(l,v)=>`<div style="flex:1;min-width:80px"><div class="small muted">${l}</div><div style="font-size:20px;font-weight:700">${v}</div></div>`;
+  app.innerHTML=`<button class="btn ghost sm" onclick="history.back()">← Back</button>
+    <div class="card"><h2 style="margin:0">${esc(st.name)}</h2>
+      <div class="small muted">${st.matches} match${st.matches!==1?'es':''} played</div></div>
+    <div class="card"><h3 style="margin-top:0">🏏 Batting</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        ${cell('Runs',b.runs)}${cell('Innings',b.inns)}${cell('HS',b.hs+(b.hsNO&&b.hs>0?'*':''))}
+        ${cell('Average',b.avg)}${cell('Strike rate',b.sr)}${cell('Not outs',b.no)}
+        ${cell('4s',b.fours)}${cell('6s',b.sixes)}${cell('Balls',b.balls)}
+      </div></div>
+    <div class="card"><h3 style="margin-top:0">🎳 Bowling</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        ${cell('Wickets',bo.wkts)}${cell('Overs',oversStr(bo.balls))}${cell('Runs',bo.runs)}
+        ${cell('Best',bo.best)}${cell('Average',bo.avg)}${cell('Economy',bo.econ)}
+      </div></div>
+    <div class="card"><h3 style="margin-top:0">🧤 Fielding</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:12px">${cell('Catches',st.field.catches)}</div></div>
+    <div class="card"><h3 style="margin-top:0">Matches</h3>
+      ${st.played.map(p=>`<div class="matchrow" onclick="go('#/match/${p.id}')">
+        <div style="flex:1"><b>${esc(p.label)}</b><div class="small muted">${esc(p.date)} ${p.result?'· '+esc(p.result):''}</div></div>
+        <div class="muted">›</div></div>`).join('')}
+    </div>`;
+}
+
+/* ============================ Practice mode (no teams, no records) ============================
+   practices/{id} = { id, name, date, oversPerBatter, status:'live'|'done', createdAt,
+     players:[{id,name}],                         // local ids, NOT the global registry
+     turns:[{ batterId, deliveries:[{bowler,runs,extra,wicket}], out, done }],
+     currentTurn }
+   Kept in a separate collection so it never affects league/team/player stats.
+   Anyone can score and anyone can delete — it's just for training.
+============================================================================================= */
+let practiceBowler={}; // practiceId -> pending bowler for the next over
+async function savePractice(p){ p.updatedAt=Date.now(); await PRACTICECOL().doc(p.id).set(p); }
+
+function derivePractice(p){
+  const nameOf=id=>{ const x=p.players.find(pp=>pp.id===id); return x?x.name:id; };
+  const bowl={};
+  const ensureBowl=id=>{ if(id&&!bowl[id]) bowl[id]={id,name:nameOf(id),balls:0,runs:0,wkts:0}; };
+  const bat=p.turns.map(t=>{
+    const st={batterId:t.batterId,name:nameOf(t.batterId),runs:0,balls:0,fours:0,sixes:0,out:!!t.out,legalBalls:0};
+    for(const d of t.deliveries){
+      ensureBowl(d.bowler); const b=bowl[d.bowler];
+      if(d.extra==='wide'){ b.runs+=1; continue; }
+      if(d.extra==='noball'){ b.runs+=1+(d.runs||0); st.runs+=(d.runs||0); continue; }
+      const r=d.runs||0; st.runs+=r; st.balls++; st.legalBalls++; if(r===4)st.fours++; if(r===6)st.sixes++;
+      b.balls++; b.runs+=r; if(d.wicket) b.wkts++;
+    }
+    return st;
+  });
+  const cur=p.turns[p.currentTurn];
+  let ballInOver=0, curBowler=null;
+  if(cur){
+    let lb=0;
+    for(const d of cur.deliveries){ if(d.extra!=='wide'&&d.extra!=='noball') lb++; }
+    ballInOver=lb%6;
+    if(ballInOver>0) for(let i=cur.deliveries.length-1;i>=0;i--){ if(cur.deliveries[i].extra!=='wide'&&cur.deliveries[i].extra!=='noball'){ curBowler=cur.deliveries[i].bowler; break; } }
+  }
+  const quotaBalls=p.oversPerBatter*6;
+  const done = p.status==='done' || p.currentTurn>=p.turns.length;
+  return {bat, bowl, ballInOver, curBowler, cur, quotaBalls, done, nameOf};
+}
+
+/* ---------- Practice list ---------- */
+function renderPractices(){
+  app.innerHTML=`<button class="btn ghost sm" onclick="go('#/')">← Home</button>
+    <button class="btn primary" style="width:100%" onclick="go('#/newpractice')">＋ New Practice</button>
+    <div class="card"><h3 style="margin:0 0 4px">Practice / Training</h3>
+      <div class="small muted">Solo net-style sessions — everyone bats a fixed quota, most runs wins. No records kept; anyone can delete.</div>
+      <div id="plist" class="muted small" style="margin-top:8px">Loading…</div></div>`;
+  unsub=PRACTICECOL().orderBy('createdAt','desc').limit(50).onSnapshot(snap=>{
+    if(snap.empty){ $('plist').innerHTML='No practice sessions. Create one to start.'; return; }
+    let html='';
+    snap.forEach(doc=>{ const p=doc.data(); const s=derivePractice(p);
+      const top=s.bat.slice().sort((a,b)=>b.runs-a.runs)[0];
+      const sub = p.status==='done' ? (top?`🏆 ${top.name} ${top.runs}`:'Done') : `In progress · ${s.bat.filter(b=>b.legalBalls>0||b.out).length}/${p.players.length} batted`;
+      const pill = p.status==='done'?'<span class="pill done">DONE</span>':'<span class="pill live">● LIVE</span>';
+      html+=`<div class="matchrow" onclick="go('#/practice/${p.id}')">
+        <div style="flex:1"><div><b>${esc(p.name||'Practice')}</b> ${pill}</div>
+          <div class="small muted">${esc(p.date||'')} · ${p.players.length} players · ${p.oversPerBatter} ov each</div>
+          <div class="small">${esc(sub)}</div></div>
+        <button class="btn sm ghost" title="Delete" onclick="event.stopPropagation();deletePractice('${p.id}')">🗑</button></div>`;
+    });
+    $('plist').innerHTML=html;
+  }, err=>{ $('plist').innerHTML='Error: '+esc(err.message); });
+}
+
+/* ---------- New practice ---------- */
+function renderNewPractice(){
+  app.innerHTML=`<button class="btn ghost sm" onclick="go('#/practices')">← Practice</button>
+    <div class="card"><h2 style="margin-top:0">New Practice</h2>
+    <label>Session name (optional)</label><input id="prName" placeholder="e.g. Tuesday nets">
+    <label>Date</label><input id="prDate" type="date" value="${todayStr()}">
+    <label>Players (one per line — batting order)</label><textarea id="prPlayers" placeholder="Player 1&#10;Player 2&#10;…"></textarea>
+    <label>Overs per batter</label><input id="prOvers" type="number" min="1" value="2">
+    <p class="small muted">Each player bats this many overs against a bowler you pick. They can get out early. Most runs wins. Nothing is saved to records.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" onclick="go('#/practices')">Cancel</button>
+      <button class="btn primary" onclick="createPractice()">Start →</button>
+    </div></div>`;
+}
+async function createPractice(){
+  const names=$('prPlayers').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(names.length<2){ toast('Add at least 2 players'); return; }
+  const players=names.map(n=>({id:uid(),name:n}));
+  const p={
+    id:uid(), name:$('prName').value.trim(), date:$('prDate').value||todayStr(),
+    oversPerBatter:Math.max(1,parseInt($('prOvers').value)||2),
+    status:'live', createdAt:Date.now(), players,
+    turns:players.map(pl=>({batterId:pl.id, deliveries:[], out:false, done:false})),
+    currentTurn:0
+  };
+  try{ await savePractice(p); go('#/practice/'+p.id); }
+  catch(e){ toast('Failed: '+e.message); }
+}
+
+/* ---------- Practice scoring ---------- */
+function renderPractice(id){
+  app.innerHTML='<div class="muted">Loading practice…</div>';
+  unsub=PRACTICECOL().doc(id).onSnapshot(doc=>{
+    if(!doc.exists){ app.innerHTML='<div class="card">Practice not found. <a onclick="go(\'#/practices\')">Practice list</a></div>'; return; }
+    drawPractice(doc.data());
+  }, err=>{ app.innerHTML='<div class="card">Error: '+esc(err.message)+'</div>'; });
+}
+function practiceScorecard(p,s){
+  const ranked=s.bat.slice().sort((a,b)=> b.runs-a.runs || a.balls-b.balls);
+  const batRows=ranked.map((b,i)=>{
+    const sr=b.balls?(b.runs/b.balls*100).toFixed(0):'-';
+    const status=b.out?'out':(b.legalBalls>=s.quotaBalls?'retired':(b.legalBalls>0?'batting':'—'));
+    return `<tr><td>${i+1}. ${esc(b.name)} <span class="small muted">${status}</span></td>
+      <td class="n"><b>${b.runs}</b></td><td class="n">${b.balls}</td><td class="n">${b.fours}</td><td class="n">${b.sixes}</td><td class="n">${sr}</td></tr>`;
+  }).join('');
+  const bowlRows=Object.values(s.bowl).map(b=>`<tr><td>${esc(b.name)}</td><td class="n">${oversStr(b.balls)}</td><td class="n">${b.runs}</td><td class="n">${b.wkts}</td></tr>`).join('')||'<tr><td class="small muted">No bowling yet</td></tr>';
+  return `<div class="card"><h3 style="margin-top:0">Batting — most runs wins</h3>
+    <table><thead><tr><th>Batter</th><th class="n">R</th><th class="n">B</th><th class="n">4s</th><th class="n">6s</th><th class="n">SR</th></tr></thead><tbody>${batRows}</tbody></table></div>
+    <div class="card"><h3 style="margin-top:0">Bowling</h3>
+    <table><thead><tr><th>Bowler</th><th class="n">O</th><th class="n">R</th><th class="n">W</th></tr></thead><tbody>${bowlRows}</tbody></table></div>`;
+}
+function drawPractice(p){
+  const s=derivePractice(p);
+  const head=`<button class="btn ghost sm" onclick="go('#/practices')">← Practice</button>
+    <div class="card"><div style="display:flex;align-items:center;gap:8px">
+      <div style="flex:1"><h2 style="margin:0">${esc(p.name||'Practice')}</h2>
+        <div class="small muted">${esc(p.date||'')} · ${p.players.length} players · ${p.oversPerBatter} ov each · <b>no records kept</b></div></div>
+      <button class="btn sm ghost" title="Delete" onclick="deletePractice('${p.id}')">🗑</button></div></div>`;
+  if(s.done){
+    const ranked=s.bat.slice().sort((a,b)=>b.runs-a.runs);
+    const win = ranked.length? (ranked.length>1 && ranked[0].runs===ranked[1].runs ? 'Tied at the top!' : `🏆 ${ranked[0].name} wins with ${ranked[0].runs}`) : '';
+    app.innerHTML=head + `<div class="card center"><div class="result">${esc(win)}</div></div>` + practiceScorecard(p,s);
+    return;
+  }
+  const cur=s.bat[p.currentTurn];
+  const ballsLeft=s.quotaBalls - cur.legalBalls;
+  const need = s.ballInOver===0; const pend=practiceBowler[p.id];
+  let controls;
+  if(need && !pend){
+    const opts=p.players.filter(pl=>pl.id!==cur.batterId)
+      .map(pl=>`<div class="chip" onclick="practicePickBowler('${p.id}','${pl.id}')">${esc(pl.name)}</div>`).join('');
+    controls=`<div class="card"><b>Over ${Math.floor(cur.legalBalls/6)+1} — who bowls to ${esc(cur.name)}?</b><div class="chips">${opts}</div></div>`;
+  }else{
+    const bowler=pend||s.curBowler;
+    controls=`<div class="card">
+      <div class="small muted" style="margin-bottom:8px">Bowling: <b>${esc(s.nameOf(bowler))}</b>
+        <button class="btn sm ghost" style="float:right" onclick="practiceChangeBowler('${p.id}')">change</button></div>
+      <div class="grid6">
+        ${[0,1,2,3,4,6].map(r=>`<button class="scorebtn ${r===4?'four':r===6?'six':r===0?'zero':''}" onclick="practiceBall('${p.id}',${r})">${r}</button>`).join('')}
+      </div>
+      <div class="extras">
+        <button class="btn" onclick="practiceExtra('${p.id}','wide')">Wide</button>
+        <button class="btn" onclick="practiceExtra('${p.id}','noball')">No-ball</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn danger" onclick="practiceOut('${p.id}')">OUT</button>
+        <button class="btn ghost" onclick="practiceUndo('${p.id}')">↶ Undo</button>
+      </div>
+      <div class="center" style="margin-top:12px"><button class="btn sm ghost" onclick="endPractice('${p.id}')">⚑ End session early</button></div>
+    </div>`;
+  }
+  const standings=s.bat.slice().sort((a,b)=>b.runs-a.runs).slice(0,3)
+    .map((b,i)=>`${i+1}. ${esc(b.name)} ${b.runs}`).join(' · ');
+  const batterCard=`<div class="card">
+    <div class="small muted">Now batting (${p.currentTurn+1}/${p.players.length})</div>
+    <div class="sb-top"><span class="bignum">${cur.runs}</span>
+      <span class="muted">${esc(cur.name)} · ${cur.balls} balls · ${oversStr(cur.legalBalls)}/${p.oversPerBatter} ov</span></div>
+    <div class="small" style="margin-top:4px">${ballsLeft} ball${ballsLeft!==1?'s':''} left in quota</div>
+    <div class="small muted" style="margin-top:6px">🏆 ${esc(standings)}</div></div>`;
+  app.innerHTML=head + batterCard + controls + practiceScorecard(p,s);
+}
+async function withPractice(id, fn){
+  const doc=await PRACTICECOL().doc(id).get(); if(!doc.exists) return;
+  const p=doc.data(); await fn(p);
+}
+function advanceIfNeeded(p){
+  const s=derivePractice(p);
+  const cur=p.turns[p.currentTurn];
+  if(!cur) return;
+  if(cur.out || s.bat[p.currentTurn].legalBalls>=p.oversPerBatter*6){
+    cur.done=true; p.currentTurn++; practiceBowler[p.id]=null;
+    if(p.currentTurn>=p.turns.length) p.status='done';
+  }
+}
+async function practiceBall(id, runs){
+  await withPractice(id, async p=>{
+    const s=derivePractice(p); const cur=p.turns[p.currentTurn]; if(!cur) return;
+    const bowler = s.ballInOver===0? practiceBowler[id] : s.curBowler;
+    if(!bowler){ toast('Pick a bowler first'); return; }
+    cur.deliveries.push({bowler, runs, extra:null, wicket:false});
+    practiceBowler[id]=null;
+    advanceIfNeeded(p);
+    await savePractice(p);
+  });
+}
+async function practiceExtra(id, kind){
+  await withPractice(id, async p=>{
+    const s=derivePractice(p); const cur=p.turns[p.currentTurn]; if(!cur) return;
+    const bowler = s.ballInOver===0? practiceBowler[id] : s.curBowler;
+    if(!bowler){ toast('Pick a bowler first'); return; }
+    cur.deliveries.push({bowler, runs:0, extra:kind, wicket:false});
+    await savePractice(p);
+  });
+}
+async function practiceOut(id){
+  await withPractice(id, async p=>{
+    const s=derivePractice(p); const cur=p.turns[p.currentTurn]; if(!cur) return;
+    const bowler = s.ballInOver===0? practiceBowler[id] : s.curBowler;
+    if(!bowler){ toast('Pick a bowler first'); return; }
+    cur.deliveries.push({bowler, runs:0, extra:null, wicket:true});
+    cur.out=true;
+    advanceIfNeeded(p);
+    await savePractice(p);
+  });
+}
+async function practiceUndo(id){
+  await withPractice(id, async p=>{
+    let t=p.turns[p.currentTurn];
+    // if current turn empty, step back to previous turn
+    if((!t || !t.deliveries.length) && p.currentTurn>0){
+      p.status='live';
+      p.currentTurn--; t=p.turns[p.currentTurn]; t.done=false; t.out=false;
+    }
+    if(t && t.deliveries.length){ t.deliveries.pop(); t.out=false; t.done=false; }
+    else { toast('Nothing to undo'); return; }
+    practiceBowler[id]=null;
+    await savePractice(p); toast('Undone');
+  });
+}
+function practicePickBowler(id,bid){ practiceBowler[id]=bid; PRACTICECOL().doc(id).get().then(d=>drawPractice(d.data())); }
+function practiceChangeBowler(id){ practiceBowler[id]=null; PRACTICECOL().doc(id).get().then(d=>drawPractice(d.data())); }
+function endPractice(id){
+  $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+    <h3 style="margin-top:0">End session now?</h3>
+    <p class="muted">Finishes the practice with current scores and shows the winner.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" onclick="__endPracticeOk('${id}')">End</button>
+    </div></div></div>`;
+}
+async function __endPracticeOk(id){
+  closeModal();
+  await withPractice(id, async p=>{ p.status='done'; await savePractice(p); toast('Session ended'); });
+}
+function deletePractice(id){
+  $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+    <h3 style="margin-top:0">Delete practice?</h3>
+    <p class="muted">Practice sessions are just for training — anyone can delete them. This can't be undone.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" onclick="__deletePracticeOk('${id}')">Delete</button>
+    </div></div></div>`;
+}
+function __deletePracticeOk(id){
+  PRACTICECOL().doc(id).delete().then(()=>{ closeModal(); toast('Deleted'); go('#/practices'); })
+    .catch(e=>toast('Delete failed: '+e.message));
+}
+
+/* ============================ Match page ============================ */
+let SCORER = {}; // matchId -> true once unlocked this session
+let localBowler = {}; // matchId -> chosen bowler for pending over
+
+function renderMatch(id){
+  app.innerHTML=`<div class="muted">Loading match…</div>`;
+  unsub = COL().doc(id).onSnapshot(doc=>{
+    if(!doc.exists){ app.innerHTML='<div class="card">Match not found. <a onclick="go(\'#/\')">Home</a></div>'; return; }
+    const m=doc.data();
+    drawMatch(m);
+  }, err=>{ app.innerHTML='<div class="card">Error: '+esc(err.message)+'</div>'; });
+}
+
+function drawMatch(m){
+  const canScore = SCORER[m.id];
+  if(m.status==='setup' || (m.innings.length<=m.currentInnings)){
+    return canScore ? drawInningsSetup(m) : drawWaiting(m);
+  }
+  const inn=m.innings[m.currentInnings];
+  const s=derive(m,inn);
+  const header = scoreboardHTML(m,inn,s);
+
+  if(m.status==='done'){ return drawSummary(m); }
+
+  // innings complete but match not done -> break screen
+  if(s.complete){
+    if(canScore) return drawInningsBreak(m,inn,s,header);
+    return app.innerHTML = header + `<div class="card center"><b>Innings complete.</b><br><span class="muted">Waiting for scorer…</span></div>` + historyLink(m);
+  }
+
+  // live
+  if(!canScore){
+    app.innerHTML = header + scorecardHTML(m,inn,s) +
+      `<div class="card center"><button class="btn blue sm" onclick="unlock('${m.id}')">✍️ Score this match</button></div>` + historyLink(m);
+    return;
+  }
+  // scorer, live
+  app.innerHTML = header + scoringControls(m,inn,s) + scorecardHTML(m,inn,s);
+}
+
+function historyLink(m){
+  const back = (m&&m.seasonId)? `#/season/${m.seasonId}` : '#/';
+  const label = (m&&m.seasonId)? '← Back to season' : '← Home';
+  return `<div class="center small" style="margin-top:14px"><a onclick="go('${back}')">${esc(label)}</a></div>`;
+}
+
+function scoreboardHTML(m,inn,s){
+  const battingName=m.teams[inn.batting].name;
+  const isSecond = m.currentInnings===1;
+  let chase='';
+  if(isSecond){
+    const first=derive(m,m.innings[0]);
+    const target=first.total+1, need=target-s.total, ballsLeft=inn.overs*6 - s.legalBalls;
+    chase=`<div class="small" style="margin-top:4px">Target <b>${target}</b> · need <b>${need}</b> off <b>${ballsLeft}</b> balls</div>`;
+  }
+  const st=s.bat[s.striker], nst=s.bat[s.nonStriker];
+  const bw=s.curBowler? s.bowl[s.curBowler]:null;
+  return `<div class="card">
+    <div class="small muted">${esc(m.teams.A.name)} vs ${esc(m.teams.B.name)} · ${esc(m.venue||'')} · ${esc(m.date||'')}
+      ${m.status==='live'?'<span class="pill live">● LIVE</span>':''}</div>
+    <div class="sb-top">
+      <span class="bignum">${s.total}/${s.wickets}</span>
+      <span class="muted">(${oversStr(s.legalBalls)}/${inn.overs} ov)</span>
+      <span class="muted small">${esc(battingName)} · RR ${rr(s.total,s.legalBalls)}</span>
+    </div>${chase}
+    <div class="small" style="margin-top:8px; display:flex; gap:16px; flex-wrap:wrap">
+      <span class="${'striker'}">${esc(st.name)} ${st.runs} (${st.balls})</span>
+      <span>${esc(nst.name)} ${nst.runs} (${nst.balls})</span>
+      ${bw?`<span class="muted">🎳 ${esc(bw.name)} ${oversStr(bw.balls)}-${bw.runs}-${bw.wkts}</span>`:''}
+    </div>
+    <div class="ball-timeline">${s.timeline.slice(-12).map(b=>`<span class="b ${b.cls}">${b.t}</span>`).join('')}</div>
+  </div>`;
+}
+
+/* ---------- scoring controls (scorer, live) ---------- */
+function scoringControls(m,inn,s){
+  const need = s.ballInOver===0; // need bowler for the new over
+  const pend = localBowler[m.id];
+  if(need && !pend){
+    // choose bowler for the over
+    const opts=m.teams[inn.bowling].players
+      .filter(p=> p.id!==s.lastOverBowler) // no consecutive overs
+      .map(p=>`<div class="chip" onclick="pickBowler('${m.id}','${p.id}')">${esc(p.name)}</div>`).join('');
+    return `<div class="card"><b>Over ${Math.floor(s.legalBalls/6)+1} — select bowler</b>
+      <div class="chips">${opts}</div>
+      ${s.lastOverBowler?`<div class="small muted" style="margin-top:6px">${esc(pName(m,s.lastOverBowler))} bowled the last over.</div>`:''}
+    </div>`;
+  }
+  const bowler = pend || s.curBowler;
+  return `<div class="card">
+    <div class="small muted" style="margin-bottom:8px">Bowling: <b>${esc(pName(m,bowler))}</b>
+      <button class="btn sm ghost" style="float:right" onclick="changeBowler('${m.id}')">change</button></div>
+    <div class="grid6">
+      <button class="scorebtn zero" onclick="ball('${m.id}',0)">0</button>
+      <button class="scorebtn" onclick="ball('${m.id}',1)">1</button>
+      <button class="scorebtn" onclick="ball('${m.id}',2)">2</button>
+      <button class="scorebtn" onclick="ball('${m.id}',3)">3</button>
+      <button class="scorebtn four" onclick="ball('${m.id}',4)">4</button>
+      <button class="scorebtn six" onclick="ball('${m.id}',6)">6</button>
+    </div>
+    <div class="extras">
+      <button class="btn" onclick="extra('${m.id}','wide')">Wide</button>
+      <button class="btn" onclick="extra('${m.id}','noball')">No-ball</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn danger" onclick="wicketModal('${m.id}')">OUT</button>
+      <button class="btn ghost" onclick="undo('${m.id}')">↶ Undo</button>
+    </div>
+    <div class="center" style="margin-top:12px">
+      <button class="btn sm ghost" onclick="endMatchModal('${m.id}')">⚑ End match early</button>
+    </div>
+  </div>`;
+}
+
+/* ---------- actions ---------- */
+async function withMatch(id, fn){
+  const doc=await COL().doc(id).get();
+  if(!doc.exists) return;
+  const m=doc.data();
+  await fn(m);
+}
+function pickBowler(id,name){ localBowler[id]=name; COL().doc(id).get().then(d=>drawMatch(d.data())); }
+function changeBowler(id){ localBowler[id]=null; COL().doc(id).get().then(d=>drawMatch(d.data())); }
+
+async function ball(id, runs){
+  await withMatch(id, async m=>{
+    const inn=m.innings[m.currentInnings];
+    const s=derive(m,inn);
+    const bowler = (s.ballInOver===0? localBowler[id] : s.curBowler);
+    if(!bowler){ toast('Select a bowler first'); return; }
+    inn.deliveries.push({bowler, runs, extra:null, wicket:null, newBatsman:null});
+    // clear pending bowler once the ball is recorded
+    localBowler[id]=null;
+    await saveMatch(m);
+  });
+}
+async function extra(id, kind){
+  if(kind==='noball'){
+    return promptRuns(id, runs=>pushExtra(id,'noball',runs));
+  }
+  pushExtra(id,'wide',0);
+}
+async function pushExtra(id, kind, runs){
+  await withMatch(id, async m=>{
+    const inn=m.innings[m.currentInnings];
+    const s=derive(m,inn);
+    const bowler=(s.ballInOver===0? localBowler[id]: s.curBowler);
+    if(!bowler){ toast('Select a bowler first'); return; }
+    inn.deliveries.push({bowler, runs:runs||0, extra:kind, wicket:null, newBatsman:null});
+    await saveMatch(m);
+  });
+}
+async function undo(id){
+  await withMatch(id, async m=>{
+    const inn=m.innings[m.currentInnings];
+    if(!inn.deliveries.length){ toast('Nothing to undo'); return; }
+    inn.deliveries.pop();
+    localBowler[id]=null;
+    await saveMatch(m);
+    toast('Undone');
+  });
+}
+
+function promptRuns(id, cb){
+  $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+    <h3 style="margin-top:0">Runs off the no-ball (bat)</h3>
+    <div class="chips">${[0,1,2,3,4,6].map(r=>`<div class="chip" onclick="__runcb(${r})">${r}</div>`).join('')}</div>
+  </div></div>`;
+  window.__runcb=(r)=>{ closeModal(); cb(r); };
+}
+
+/* ---------- wicket ---------- */
+function wicketModal(id){
+  COL().doc(id).get().then(doc=>{
+    const m=doc.data(); const inn=m.innings[m.currentInnings]; const s=derive(m,inn);
+    const bowler=(s.ballInOver===0? localBowler[id]: s.curBowler);
+    if(!bowler){ toast('Select a bowler first'); return; }
+    const fielders=m.teams[inn.bowling].players; // [{id,name}]
+    const w={type:'bowled', out:'striker', catcher:null};
+    const types=['bowled','caught','lbw','run out','stumped'];
+    const availBatsmen=m.teams[inn.batting].players.filter(p=>{
+      // available = not currently at crease and not already out
+      if(p.id===s.striker||p.id===s.nonStriker) return false;
+      const b=s.bat[p.id]; return !(b&&b.out);
+    });
+    const render=()=>{
+      $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+        <h3 style="margin-top:0">Wicket 🏏</h3>
+        <label>How out?</label>
+        <div class="chips" id="wtype">${types.map(t=>`<div class="chip ${w.type===t?'sel':''}" onclick="__wset('type','${t}')">${t}</div>`).join('')}</div>
+        <label>Who is out?</label>
+        <div class="chips">
+          <div class="chip ${w.out==='striker'?'sel':''}" onclick="__wset('out','striker')">${esc(pName(m,s.striker))} (striker)</div>
+          <div class="chip ${w.out==='nonstriker'?'sel':''}" onclick="__wset('out','nonstriker')">${esc(pName(m,s.nonStriker))} (non-striker)</div>
+        </div>
+        ${w.type==='caught'?`<label>Caught by</label><div class="chips">${fielders.map(f=>`<div class="chip ${w.catcher===f.id?'sel':''}" onclick="__wset('catcher','${f.id}')">${esc(f.name)}</div>`).join('')}</div>`:''}
+        <label>New batsman</label>
+        <div class="chips">${availBatsmen.map(p=>`<div class="chip ${w.newBatsman===p.id?'sel':''}" onclick="__wset('newBatsman','${p.id}')">${esc(p.name)}</div>`).join('')}</div>
+        <label>Runs completed this ball (usually 0)</label>
+        <div class="chips">${[0,1,2,3].map(r=>`<div class="chip ${(w.runs||0)===r?'sel':''}" onclick="__wset('runs',${r})">${r}</div>`).join('')}</div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn ghost" onclick="closeModal()">Cancel</button>
+          <button class="btn danger" onclick="__wconfirm()">Confirm wicket</button>
+        </div>
+      </div></div>`;
+    };
+    window.__wset=(k,v)=>{ w[k]=v; if(k==='type'&&v!=='caught') w.catcher=null; render(); };
+    window.__wconfirm=async()=>{
+      if(w.type==='caught' && !w.catcher){ toast('Pick the catcher'); return; }
+      if(!w.newBatsman && availBatsmen.length){ toast('Pick the new batsman'); return; }
+      closeModal();
+      inn.deliveries.push({bowler, runs:w.runs||0, extra:null,
+        wicket:{type:w.type, out:w.out, catcher:w.catcher}, newBatsman:w.newBatsman||null});
+      localBowler[id]=null;
+      await saveMatch(m);
+    };
+    render();
+  });
+}
+
+/* ---------- become the scorer (no PIN) ---------- */
+function unlock(id){
+  SCORER[id]=true;
+  COL().doc(id).get().then(doc=>{ if(doc.exists) drawMatch(doc.data()); });
+}
+
+/* ---------- innings setup ---------- */
+function drawInningsSetup(m){
+  const n=m.currentInnings;
+  // default batting: innings 0 -> Team A; innings 1 -> whoever didn't bat first
+  let defBat='A';
+  if(n===1){ defBat = m.innings[0].batting==='A'?'B':'A'; }
+  const inn = m.innings[n] || {batting:defBat};
+  const bat = inn.batting || defBat;
+  const bowl = bat==='A'?'B':'A';
+  const batP=m.teams[bat].players, bowlP=m.teams[bowl].players;
+  const first = n===1? derive(m,m.innings[0]) : null;
+  app.innerHTML=`<div class="card">
+    <h2 style="margin-top:0">${n===0?'1st':'2nd'} Innings setup</h2>
+    ${first?`<p class="result">${esc(m.teams[m.innings[0].batting].name)} scored ${first.total}/${first.wickets}. Target ${first.total+1}.</p>`:''}
+    <label>Batting team</label>
+    <select id="batTeam" onchange="__reSetup('${m.id}',this.value)">
+      <option value="A" ${bat==='A'?'selected':''}>${esc(m.teams.A.name)}</option>
+      <option value="B" ${bat==='B'?'selected':''}>${esc(m.teams.B.name)}</option>
+    </select>
+    <label>Overs</label><input id="innOvers" type="number" value="${m.oversPerInnings}" min="1">
+    <label>Striker</label><select id="striker">${batP.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
+    <label>Non-striker</label><select id="nonstriker">${batP.map((p,i)=>`<option value="${p.id}" ${i===1?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
+    <label>Opening bowler (${esc(m.teams[bowl].name)})</label><select id="obowler">${bowlP.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
+    <button class="btn primary" style="width:100%;margin-top:14px" onclick="startInnings('${m.id}')">Start innings ▶</button>
+  </div>${historyLink(m)}`;
+}
+async function __reSetup(id, batTeam){
+  await withMatch(id, async m=>{
+    m.innings[m.currentInnings]={batting:batTeam}; // temp
+    // don't save; just redraw
+    drawInningsSetup(m);
+  });
+}
+async function startInnings(id){
+  const bat=$('batTeam').value, bowl=bat==='A'?'B':'A';
+  const striker=$('striker').value, nonstriker=$('nonstriker').value;
+  if(striker===nonstriker){ toast('Striker and non-striker must differ'); return; }
+  await withMatch(id, async m=>{
+    const inn={ batting:bat, bowling:bowl, overs:Math.max(1,parseInt($('innOvers').value)||m.oversPerInnings),
+      strikerInit:striker, nonStrikerInit:nonstriker, deliveries:[], closed:false };
+    m.innings[m.currentInnings]=inn;
+    localBowler[id]=$('obowler').value; // opening bowler
+    m.status='live';
+    await saveMatch(m);
+  });
+}
+
+/* ---------- innings break / summary transitions ---------- */
+function drawInningsBreak(m,inn,s,header){
+  const isFirst = m.currentInnings===0;
+  app.innerHTML = header + `<div class="card center">
+    <h3>Innings complete</h3>
+    <p class="result">${esc(m.teams[inn.batting].name)} ${s.total}/${s.wickets} (${oversStr(s.legalBalls)} ov)</p>
+    ${isFirst?
+      `<button class="btn primary" onclick="startSecond('${m.id}')">Start 2nd innings ▶</button>`:
+      `<button class="btn primary" onclick="finishMatch('${m.id}')">Finish match & see result 🏆</button>`}
+  </div>` + scorecardHTML(m,inn,s) + historyLink(m);
+}
+async function startSecond(id){
+  await withMatch(id, async m=>{
+    // ensure first innings closed
+    m.innings[0].closed=true;
+    m.currentInnings=1;
+    m.status='setup'; // triggers innings setup for scorer
+    await saveMatch(m);
+  });
+}
+// Compute a result string from whatever's been played so far.
+function matchResult(m){
+  const i0=m.innings[0]; if(!i0) return 'Match ended early';
+  const a=derive(m,i0); const i1=m.innings[1];
+  if(!i1){ return `Match ended early — ${m.teams[i0.batting].name} ${a.total}/${a.wickets}`; }
+  const b=derive(m,i1); const t1=a.total, t2=b.total;
+  const n1=m.teams[i0.batting].name, n2=m.teams[i1.batting].name;
+  if(t2>t1){ const wl=(m.teams[i1.batting].players.length-1)-b.wickets; return `${n2} won by ${wl} wicket${wl!==1?'s':''}`; }
+  if(t1>t2){ return `${n1} won by ${t1-t2} run${t1-t2!==1?'s':''}`; }
+  return 'Match tied';
+}
+async function finishMatch(id){
+  await withMatch(id, async m=>{
+    m.innings[1].closed=true;
+    m.result=matchResult(m); m.status='done';
+    await saveMatch(m);
+  });
+}
+// End a match early (abandon / stop mid-innings) — scorer only.
+function endMatchModal(id){
+  $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+    <h3 style="margin-top:0">End match now?</h3>
+    <p class="muted">This finishes the match with the current scores and shows a result. You can still view the scorecard and export it afterwards.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" onclick="__endMatchOk('${id}')">End match</button>
+    </div></div></div>`;
+}
+async function __endMatchOk(id){
+  closeModal();
+  await withMatch(id, async m=>{
+    const cur=m.innings[m.currentInnings]; if(cur) cur.closed=true;
+    m.result=matchResult(m); m.status='done';
+    await saveMatch(m);
+    toast('Match ended');
+  });
+}
+
+function drawSummary(m){
+  const a=m.innings[0], b=m.innings[1];
+  const sa=derive(m,a), sb=b?derive(m,b):null;
+  app.innerHTML=`<div class="card center">
+    <div class="small muted">${esc(m.venue||'')} · ${esc(m.date||'')}</div>
+    <h2 style="margin:6px 0">${esc(m.teams.A.name)} vs ${esc(m.teams.B.name)}</h2>
+    <p class="result">🏆 ${esc(m.result||'')}</p>
+    <button class="btn blue sm" onclick="exportCSV('${m.id}')">⬇ Export CSV (for Google Sheets)</button>
+  </div>
+  ${inningsCard(m,a,sa)}
+  ${b?inningsCard(m,b,sb):''}
+  ${historyLink(m)}`;
+}
+function inningsCard(m,inn,s){
+  return `<div class="card"><h3 style="margin-top:0">${esc(m.teams[inn.batting].name)} — ${s.total}/${s.wickets} (${oversStr(s.legalBalls)} ov)</h3>
+    ${scorecardTables(m,inn,s)}</div>`;
+}
+
+/* ---------- live scorecard (compact) ---------- */
+function scorecardHTML(m,inn,s){
+  return `<div class="card"><h3 style="margin-top:0">Scorecard</h3>${scorecardTables(m,inn,s)}</div>`;
+}
+function howOutStr(m,b){
+  if(!b.out) return 'not out';
+  const o=b.out;
+  if(o.type==='caught') return `c ${esc(pName(m,o.catcher)||'?')} b ${esc(pName(m,o.bowler))}`;
+  if(o.type==='bowled') return `b ${esc(pName(m,o.bowler))}`;
+  if(o.type==='lbw') return `lbw b ${esc(pName(m,o.bowler))}`;
+  if(o.type==='stumped') return `st b ${esc(pName(m,o.bowler))}`;
+  if(o.type==='run out') return `run out`;
+  return esc(o.type);
+}
+function scorecardTables(m,inn,s){
+  const seen=new Set();
+  // preserve batting appearance order (ids)
+  const order=[]; const add=n=>{ if(n&&!seen.has(n)){ seen.add(n); order.push(n);} };
+  add(inn.strikerInit); add(inn.nonStrikerInit);
+  inn.deliveries.forEach(d=>{ if(d.newBatsman) add(d.newBatsman); });
+  Object.keys(s.bat).forEach(add);
+  const batRows=order.filter(n=>s.bat[n]).map(n=>{
+    const b=s.bat[n]; const atCrease=(n===s.striker||n===s.nonStriker)&&!b.out&&!s.complete;
+    const sr=b.balls? (b.runs/b.balls*100).toFixed(0):'-';
+    return `<tr><td class="${n===s.striker&&atCrease?'striker':''}">${esc(b.name)} ${atCrease?'<span class="muted small">(batting)</span>':''}<div class="small muted">${howOutStr(m,b)}</div></td>
+      <td class="n">${b.runs}</td><td class="n">${b.balls}</td><td class="n">${b.fours}</td><td class="n">${b.sixes}</td><td class="n">${sr}</td></tr>`;
+  }).join('');
+  const bowlRows=Object.values(s.bowl).map(b=>{
+    const econ=b.balls? (b.runs/(b.balls/6)).toFixed(1):'-';
+    return `<tr><td>${esc(b.name)}</td><td class="n">${oversStr(b.balls)}</td><td class="n">${b.runs}</td><td class="n">${b.wkts}</td><td class="n">${econ}</td></tr>`;
+  }).join('');
+  return `<table><thead><tr><th>Batsman</th><th class="n">R</th><th class="n">B</th><th class="n">4s</th><th class="n">6s</th><th class="n">SR</th></tr></thead>
+    <tbody>${batRows}</tbody></table>
+    <div class="small muted" style="margin:6px 0">Extras ${s.extrasTotal} · Total ${s.total}/${s.wickets}</div>
+    <table style="margin-top:8px"><thead><tr><th>Bowler</th><th class="n">O</th><th class="n">R</th><th class="n">W</th><th class="n">Econ</th></tr></thead>
+    <tbody>${bowlRows}</tbody></table>`;
+}
+
+function drawWaiting(m){
+  app.innerHTML=`<div class="card">
+    <div class="small muted">${esc(m.venue||'')} · ${esc(m.date||'')}</div>
+    <h2>${esc(m.teams.A.name)} vs ${esc(m.teams.B.name)}</h2>
+    <p class="muted">Match not started yet. Waiting for the scorer to set up the innings.</p>
+    <button class="btn blue" onclick="unlock('${m.id}')">✍️ I'm the scorer</button>
+  </div>${historyLink(m)}`;
+}
+
+/* ---------- CSV export ---------- */
+function exportCSV(id){
+  COL().doc(id).get().then(doc=>{
+    const m=doc.data();
+    let csv=[];
+    csv.push(['Match',`${m.teams.A.name} vs ${m.teams.B.name}`]);
+    csv.push(['Venue',m.venue]); csv.push(['Date',m.date]); csv.push(['Result',m.result||'']);
+    csv.push([]);
+    m.innings.forEach((inn,idx)=>{
+      const s=derive(m,inn);
+      csv.push([`Innings ${idx+1}: ${m.teams[inn.batting].name}`, `${s.total}/${s.wickets}`, `${oversStr(s.legalBalls)} ov`]);
+      csv.push(['Batsman','R','B','4s','6s','Dismissal']);
+      Object.values(s.bat).forEach(b=>csv.push([b.name,b.runs,b.balls,b.fours,b.sixes,howOutStrPlain(m,b)]));
+      csv.push(['Bowler','O','R','W']);
+      Object.values(s.bowl).forEach(b=>csv.push([b.name,oversStr(b.balls),b.runs,b.wkts]));
+      csv.push([]);
+      csv.push(['Ball-by-ball']); csv.push(['Over.Ball','Bowler','Runs','Extra','Wicket']);
+      let lb=0;
+      inn.deliveries.forEach(d=>{
+        const legal=!(d.extra==='wide'||d.extra==='noball');
+        if(legal) lb++;
+        csv.push([oversStr(legal?lb:lb)+(legal?'':'*'),pName(m,d.bowler),d.runs||0,d.extra||'',d.wicket?d.wicket.type:'']);
+      });
+      csv.push([]);
+    });
+    const text=csv.map(r=>r.map(c=>{const v=(c==null?'':String(c)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(',')).join('\n');
+    const blob=new Blob([text],{type:'text/csv'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`${m.teams.A.name}_vs_${m.teams.B.name}_${m.date}.csv`.replace(/\s+/g,'_');
+    a.click();
+  });
+}
+function howOutStrPlain(m,b){
+  if(!b.out) return 'not out';
+  const o=b.out;
+  if(o.type==='caught') return `c ${pName(m,o.catcher)||'?'} b ${pName(m,o.bowler)}`;
+  if(o.type==='bowled') return `b ${pName(m,o.bowler)}`;
+  if(o.type==='lbw') return `lbw b ${pName(m,o.bowler)}`;
+  if(o.type==='stumped') return `st b ${pName(m,o.bowler)}`;
+  return o.type;
+}
+
+/* ============================ Dynamic retro backdrop ============================
+   On each page load, pull random cricket photos (cricketers, grounds, World Cup
+   moments, crowds) from Wikimedia Commons and splatter them like clippings.
+   Dravid & Chappell are bundled locally and always included.
+=================================================================================== */
+// amazing grounds — big & in colour
+const GROUND_QUERIES=[
+  'Lord\'s Cricket Ground','Melbourne Cricket Ground','Eden Gardens Kolkata',
+  'Wankhede Stadium','The Oval cricket London','Sydney Cricket Ground','cricket stadium'
+];
+// vintage cricketers, great bowlers, great Indian batsmen — big & sepia
+const PLAYER_QUERIES=[
+  'Don Bradman','Garfield Sobers','Vivian Richards cricketer','Sunil Gavaskar','Sachin Tendulkar',
+  'Kapil Dev cricket','Wasim Akram','Shane Warne cricket','Malcolm Marshall cricket','Anil Kumble',
+  'Glenn McGrath cricket','Brian Lara','Virat Kohli','Muttiah Muralitharan'
+];
+// world-cup-winning moments — medium & sepia
+const MOMENT_QUERIES=[
+  'Cricket World Cup celebration trophy','India 2011 Cricket World Cup','cricket world cup final',
+  'West Indies 1975 Cricket World Cup','cricket team celebration'
+];
+let BG_IMAGES=[]; // fetched pool, shared by ambient collage + home gallery
+let DRAVID_PICS=['assets/dravid.jpg']; // several Dravid photos; the frame cycles through them
+let dravidIdx=0, dravidTimer=null;
+function bgShuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function startDravidRotator(){
+  if(dravidTimer) clearInterval(dravidTimer);
+  if(DRAVID_PICS.length<2) return;
+  dravidTimer=setInterval(()=>{
+    const imgs=document.querySelectorAll('img.dravid'); if(!imgs.length) return;
+    dravidIdx=(dravidIdx+1)%DRAVID_PICS.length;
+    const next=DRAVID_PICS[dravidIdx];
+    const pre=new Image();
+    pre.onload=()=>imgs.forEach(im=>{ im.style.opacity='0'; setTimeout(()=>{ im.src=next; im.style.opacity=''; }, 450); });
+    pre.src=next;
+  }, 5000);
+}
+let tileTimer=null;
+function startTileRotator(){
+  if(tileTimer) clearInterval(tileTimer);
+  const pool=BG_IMAGES.filter(x=>!x.dravid);
+  if(pool.length<2) return;
+  tileTimer=setInterval(()=>{
+    const tiles=[...document.querySelectorAll('#gallery .ph img:not(.dravid)')];
+    if(!tiles.length) return;
+    const img=tiles[Math.floor(Math.random()*tiles.length)];          // one random non-Dravid tile
+    const shown=new Set(tiles.map(t=>t.src));
+    const choices=pool.filter(it=>!shown.has(it.url));
+    const next=(choices.length?choices:pool)[Math.floor(Math.random()*((choices.length?choices:pool).length))];
+    const pre=new Image();
+    pre.onload=()=>{ img.style.opacity='0'; setTimeout(()=>{ img.src=next.url; img.classList.toggle('ground', !!next.ground); img.style.opacity=''; }, 450); };
+    pre.src=next.url;
+  }, 4000);
+}
+function fillGallery(){
+  const g=document.getElementById('gallery'); if(!g) return;
+  if(!BG_IMAGES.length){ g.innerHTML='<span class="small muted">Loading photos…</span>'; return; }
+  const frameClasses=['hero','wide','tall','','pano','wide','tall','','wide','','hero',''];
+  // always lead with a rotating Dravid hero, then the rest
+  const dravid=BG_IMAGES.find(x=>x.dravid) || {url:DRAVID_PICS[0], dravid:true};
+  const rest=bgShuffle(BG_IMAGES.filter(x=>!x.dravid)).slice(0,11);
+  const shots=[dravid, ...rest];
+  g.innerHTML=shots.map((it,i)=>{
+    const frame = it.dravid ? 'hero' : frameClasses[i%frameClasses.length];
+    const cls = (it.dravid?'dravid ':'') + (it.ground?'ground':'');
+    return `<div class="ph ${frame}"><img loading="lazy" class="${cls.trim()}" src="${it.url}" onerror="this.closest('.ph').remove()"></div>`;
+  }).join('');
+  startDravidRotator();
+  startTileRotator();
+}
+async function commonsSearch(term,n){
+  const api='https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*'
+    +'&generator=search&gsrnamespace=6&gsrlimit='+n
+    +'&gsrsearch='+encodeURIComponent('filetype:bitmap '+term)
+    +'&prop=imageinfo&iiprop=url|mediatype&iiurlwidth=460';
+  const r=await fetch(api); if(!r.ok) throw new Error('bad'); const j=await r.json();
+  const pages=(j.query&&j.query.pages)||{};
+  return Object.values(pages).map(p=>p.imageinfo&&p.imageinfo[0]).filter(Boolean)
+    .filter(ii=>ii.mediatype==='BITMAP' && /\.jpe?g$/i.test(ii.url||''))
+    .map(ii=>ii.thumburl).filter(Boolean);
+}
+// Openverse = Creative-Commons image search (Flickr, Commons, etc). Free to embed.
+// Anonymous requests are capped at page_size 20, so clamp and allow paging.
+async function openverseSearch(term,n,page){
+  const ps=Math.min(20, n||20);
+  const url='https://api.openverse.org/v1/images/?q='+encodeURIComponent(term)+'&page_size='+ps+'&page='+(page||1)+'&mature=false';
+  const r=await fetch(url,{headers:{'Accept':'application/json'}}); if(!r.ok) throw new Error('ov');
+  const j=await r.json(); if(!j.results) return [];
+  return j.results.map(x=>x.url).filter(u=>/\.jpe?g$/i.test(u||''));
+}
+// fetch many pages (20 each) from Openverse
+async function openverseAll(term, maxPages){
+  const out=[];
+  for(let p=1;p<=maxPages;p++){
+    let batch=[]; try{ batch=await openverseSearch(term,20,p); }catch(e){ break; }
+    if(!batch.length) break;
+    out.push(...batch);
+  }
+  return out;
+}
+// pull a category from both Commons and Openverse and merge
+async function bothSources(term,n){
+  const [a,b]=await Promise.all([ commonsSearch(term,n).catch(()=>[]), openverseSearch(term,n).catch(()=>[]) ]);
+  return [...a,...b];
+}
+function splatter(items){
+  const bd=$('backdrop'); if(!bd) return; bd.innerHTML='';
+  const W=window.innerWidth||360, H=window.innerHeight||640;
+  // the readable content column is centred (<=640px); keep images out of it
+  const colW=Math.min(640, W-24), colLeft=(W-colW)/2, colRight=colLeft+colW;
+  // split across the two gutters, then stack one-per-band down each side (no overlap)
+  const shuffled=bgShuffle(items);
+  const sides={left:[], right:[]};
+  shuffled.forEach((it,i)=> sides[i%2?'right':'left'].push(it));
+  const topPad=74, gap=16;
+  ['left','right'].forEach(side=>{
+    const list=sides[side], n=list.length; if(!n) return;
+    const bandH=(H-topPad-8)/n;
+    list.forEach((it,k)=>{
+      const img=new Image();
+      const w=(it.ground?300:it.game?240:it.great?200:160)+Math.floor(Math.random()*(it.ground?120:80));
+      let h=Math.round(w*(it.ground?0.62:0.8));
+      h=Math.min(h, Math.max(64, Math.floor(bandH-gap)));   // never taller than its band -> no vertical overlap
+      const left = side==='left' ? Math.round(colLeft - w + 22)   // bleed off the left edge
+                                 : Math.round(colRight - 22);      // bleed off the right edge
+      const top = Math.round(topPad + k*bandH + Math.max(0,(bandH-gap-h))/2);
+      img.style.width=w+'px'; img.style.height=h+'px';
+      img.style.left=left+'px'; img.style.top=top+'px';
+      img.style.transform='rotate('+(Math.random()*14-7).toFixed(1)+'deg)';
+      if(it.great) img.classList.add('great');
+      if(it.ground) img.classList.add('ground');
+      if(it.dravid) img.classList.add('dravid');
+      img.onload=()=>img.classList.add('on');
+      img.onerror=()=>img.remove();
+      img.src=it.url;
+      bd.appendChild(img);
+    });
+  });
+  window.__bgItems=items; // remember for re-layout on resize/rotate
+}
+window.addEventListener('resize', ()=>{ if(window.__bgItems) splatter(window.__bgItems); });
+async function loadBackdrop(){
+  // pull as many distinct Dravid photos as the sources have, across several search terms
+  try{
+    const DRAVID_TERMS=['Rahul Dravid','Rahul Dravid cricket','Rahul Dravid batting',
+      'Rahul Dravid India','Rahul Dravid coach','Rahul Dravid test match','Dravid The Wall'];
+    const jobs=DRAVID_TERMS.map((t,i)=>openverseAll(t, i===0?5:2).catch(()=>[]));
+    jobs.push(commonsSearch('Rahul Dravid',100).catch(()=>[]));
+    const res=await Promise.all(jobs);
+    const uniq=[...new Set([].concat(...res))];
+    if(uniq.length) DRAVID_PICS=bgShuffle(uniq).slice(0,300); // however many exist
+    console.log('Dravid photos loaded:', DRAVID_PICS.length);
+  }catch(e){}
+  // the greats are always around (Dravid rotates)
+  const items=[{url:DRAVID_PICS[0],great:true,dravid:true},{url:'assets/chappell.jpg',great:true}];
+  try{
+    const gTerms=bgShuffle(GROUND_QUERIES).slice(0,2);
+    const pTerms=bgShuffle(PLAYER_QUERIES).slice(0,3);
+    const mTerms=bgShuffle(MOMENT_QUERIES).slice(0,2);
+    const [grounds,players,moments]=await Promise.all([
+      Promise.all(gTerms.map(t=>bothSources(t,4).catch(()=>[]))).then(r=>[].concat(...r)),
+      Promise.all(pTerms.map(t=>bothSources(t,3).catch(()=>[]))).then(r=>[].concat(...r)),
+      Promise.all(mTerms.map(t=>bothSources(t,4).catch(()=>[]))).then(r=>[].concat(...r)),
+    ]);
+    bgShuffle([...new Set(grounds)]).slice(0,3).forEach(u=>items.push({url:u, ground:true})); // colour, biggest
+    bgShuffle([...new Set(players)]).slice(0,4).forEach(u=>items.push({url:u, game:true}));    // sepia, big
+    bgShuffle([...new Set(moments)]).slice(0,3).forEach(u=>items.push({url:u}));               // sepia, medium
+  }catch(e){}
+  if(items.length<=2) items.push({url:'assets/sobers.jpg'}); // offline fallback
+  BG_IMAGES=items;
+  splatter(items);   // ambient side collage (wide screens)
+  fillGallery();     // visible gallery under Leagues (all screens, esp. phones)
+}
+loadBackdrop();
+</script>
+</body>
+</html>
