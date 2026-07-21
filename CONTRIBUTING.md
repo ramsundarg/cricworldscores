@@ -46,8 +46,28 @@ Open the printed URL. It talks to the **live** Firestore, so be gentle with test
    ```
 5. Open a **Pull Request** on GitHub. Someone reviews & merges to `main`.
 
-## Deploying (maintainers)
-After a PR is merged to `main`:
+## Deploying
+
+### Automatic (default) — merge to `main`
+There's a GitHub Action (`.github/workflows/deploy.yml`) that **auto-publishes to
+https://cricworldscores.web.app whenever `main` is updated**. So the normal flow is just:
+open a PR → get it merged → it deploys itself. Contributors need **no** Firebase access.
+
+**One-time setup by the repo owner** (so the Action can deploy):
+- Easiest: run this once locally and it wires up the service account + GitHub secret for you:
+  ```bash
+  firebase init hosting:github
+  ```
+  (Point it at this repo; let it set up the workflow / secret. You can keep the existing
+  `deploy.yml`.)
+- Or manually: Firebase Console → ⚙ Project settings → **Service accounts** →
+  *Generate new private key* → in GitHub repo **Settings → Secrets and variables → Actions**,
+  add a secret named `FIREBASE_SERVICE_ACCOUNT_CRICWORLDSCORES` with the JSON contents.
+
+> Note: the Action deploys **hosting** only. If you change `firestore.rules`, a maintainer
+> runs `firebase deploy --only firestore:rules` once (rare).
+
+### Manual (if you have Firebase access)
 ```bash
 firebase deploy --only hosting              # app changes (most common)
 firebase deploy --only firestore:rules      # only if you edited firestore.rules
