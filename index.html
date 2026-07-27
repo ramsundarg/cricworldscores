@@ -869,8 +869,9 @@ function derivePractice(p){
     const st={batterId:t.batterId,name:nameOf(t.batterId),runs:0,balls:0,fours:0,sixes:0,out:!!t.out,legalBalls:0};
     for(const d of t.deliveries){
       ensureBowl(d.bowler); const b=bowl[d.bowler];
-      if(d.extra==='wide'){ b.runs+=1; continue; }
-      if(d.extra==='noball'){ b.runs+=1+(d.runs||0); st.runs+=(d.runs||0); continue; }
+      // solo practice has no team total, so extras count toward the current batter's score
+      if(d.extra==='wide'){ b.runs+=1; st.runs+=1; continue; }
+      if(d.extra==='noball'){ const nb=1+(d.runs||0); b.runs+=nb; st.runs+=nb; continue; }
       const r=d.runs||0; st.runs+=r; st.balls++; st.legalBalls++; if(r===4)st.fours++; if(r===6)st.sixes++;
       b.balls++; b.runs+=r; if(d.wicket) b.wkts++;
     }
