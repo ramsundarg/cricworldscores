@@ -193,7 +193,7 @@ function pName(m,id){
 function derive(match, inn){
   const battingPlayers = match.teams[inn.batting].players; // [{id,name}]
   const bat={}, bowl={};   // keyed by player id
-  const ensureBat=id=>{ if(id && !bat[id]) bat[id]={id,name:pName(match,id),runs:0,balls:0,fours:0,sixes:0,out:null}; };
+  const ensureBat=id=>{ if(id && !bat[id]) bat[id]={id,name:pName(match,id),runs:0,balls:0,fours:0,sixes:0,out:null,retired:false}; };
   const ensureBowl=id=>{ if(id && !bowl[id]) bowl[id]={id,name:pName(match,id),balls:0,runs:0,wkts:0}; };
   let total=0, wickets=0, legalBalls=0, extrasTotal=0;
   let striker=inn.strikerInit, nonStriker=inn.nonStrikerInit;
@@ -228,18 +228,23 @@ function derive(match, inn){
     if(d.wicket){
       const outWho = d.wicket.out==='nonstriker' ? 'nonStriker':'striker';
       const outName = outWho==='striker'? striker : nonStriker;
-      let how = d.wicket.type;
-      bat[outName].out = { type:how, catcher:d.wicket.catcher||null, bowler:d.bowler };
+      const how = d.wicket.type;
       if(how==='retired hurt'){
+        // NOT out, NOT a wicket — set aside; this batter can return later
+        bat[outName].out = null;
+        bat[outName].retired = true;
         timeline.push({t:'Ret',cls:'ex'});
       }else{
+        bat[outName].out = { type:how, catcher:d.wicket.catcher||null, bowler:d.bowler };
+        bat[outName].retired = false;
         wickets++;
-        if(how!=='run out') b.wkts++;
-        timeline.push({t:'W',cls:'w'});
+        if(how!=='run out' && how!=='retired out') b.wkts++;   // retired out isn't the bowler's wicket
+        timeline.push({t: how==='retired out'?'RO':'W', cls: how==='retired out'?'ex':'w'});
       }
-      // bring in new batsman to the vacated end
+      // bring in the new batsman (may be a returning retired-hurt player)
       if(outWho==='striker') striker = d.newBatsman; else nonStriker = d.newBatsman;
       ensureBat(striker); ensureBat(nonStriker);
+      if(d.newBatsman && bat[d.newBatsman]) bat[d.newBatsman].retired=false; // back at the crease
     }else{
       if(r%2===1) swap();
       timeline.push({t:String(r), cls: r===4?'four': r===6?'six': ''});
@@ -255,7 +260,8 @@ function derive(match, inn){
     const first = derive(match, match.innings[0]);
     if(total > first.total) targetReached = true;
   }
-  const complete = inn.closed || allOut || oversDone || targetReached;
+  const outOfBatters = !striker || !nonStriker;   // a dismissal left nobody to come in
+  const complete = inn.closed || allOut || oversDone || targetReached || outOfBatters;
   // current bowler = bowler of the last delivery of the in-progress over
   let curBowler=null;
   if(ballInOver>0){ // find bowler of current over
@@ -1292,9 +1298,9 @@ function wicketModal(id){
     if(!bowler){ toast('Select a bowler first'); return; }
     const fielders=m.teams[inn.bowling].players; // [{id,name}]
     const w={type:'bowled', out:'striker', catcher:null};
-    const types=['bowled','caught','lbw','run out','stumped','retired hurt'];
+    const types=['bowled','caught','lbw','run out','stumped','retired hurt','retired out'];
+    // available = not currently at crease and not dismissed; retired-hurt batters CAN return (shown with ↩)
     const availBatsmen=m.teams[inn.batting].players.filter(p=>{
-      // available = not currently at crease and not already out/retired
       if(p.id===s.striker||p.id===s.nonStriker) return false;
       const b=s.bat[p.id]; return !(b&&b.out);
     });
@@ -1309,8 +1315,8 @@ function wicketModal(id){
           <div class="chip ${w.out==='nonstriker'?'sel':''}" onclick="__wset('out','nonstriker')">${esc(pName(m,s.nonStriker))} (non-striker)</div>
         </div>
         ${w.type==='caught'?`<label>Caught by</label><div class="chips">${fielders.map(f=>`<div class="chip ${w.catcher===f.id?'sel':''}" onclick="__wset('catcher','${f.id}')">${esc(f.name)}</div>`).join('')}</div>`:''}
-        <label>New batsman</label>
-        <div class="chips">${availBatsmen.map(p=>`<div class="chip ${w.newBatsman===p.id?'sel':''}" onclick="__wset('newBatsman','${p.id}')">${esc(p.name)}</div>`).join('')}</div>
+        <label>New batsman ${availBatsmen.length?'':'<span class="small" style="color:var(--warn)">(nobody left — confirm to end the innings)</span>'}</label>
+        <div class="chips">${availBatsmen.map(p=>{const ret=s.bat[p.id]&&s.bat[p.id].retired; return `<div class="chip ${w.newBatsman===p.id?'sel':''}" onclick="__wset('newBatsman','${p.id}')">${esc(p.name)}${ret?' ↩':''}</div>`;}).join('')}</div>
         <label>Runs completed this ball (usually 0)</label>
         <div class="chips">${[0,1,2,3].map(r=>`<div class="chip ${(w.runs||0)===r?'sel':''}" onclick="__wset('runs',${r})">${r}</div>`).join('')}</div>
         <div class="row" style="margin-top:14px">
@@ -1486,9 +1492,9 @@ function scorecardHTML(m,inn,s){
   return `<div class="card"><h3 style="margin-top:0">Scorecard</h3>${scorecardTables(m,inn,s)}</div>`;
 }
 function howOutStr(m,b){
-  if(!b.out) return 'not out';
+  if(!b.out) return b.retired ? 'retired not out' : 'not out';
   const o=b.out;
-  if(o.type==='retired hurt') return 'retired hurt';
+  if(o.type==='retired out') return 'retired out';
   if(o.type==='caught') return `c ${esc(pName(m,o.catcher)||'?')} b ${esc(pName(m,o.bowler))}`;
   if(o.type==='bowled') return `b ${esc(pName(m,o.bowler))}`;
   if(o.type==='lbw') return `lbw b ${esc(pName(m,o.bowler))}`;
@@ -1562,9 +1568,9 @@ function exportCSV(id){
   });
 }
 function howOutStrPlain(m,b){
-  if(!b.out) return 'not out';
+  if(!b.out) return b.retired ? 'retired not out' : 'not out';
   const o=b.out;
-  if(o.type==='retired hurt') return 'retired hurt';
+  if(o.type==='retired out') return 'retired out';
   if(o.type==='caught') return `c ${pName(m,o.catcher)||'?'} b ${pName(m,o.bowler)}`;
   if(o.type==='bowled') return `b ${pName(m,o.bowler)}`;
   if(o.type==='lbw') return `lbw b ${pName(m,o.bowler)}`;
