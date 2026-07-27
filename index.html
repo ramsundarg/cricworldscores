@@ -117,7 +117,8 @@
     padding:10px 16px; border-radius:6px; z-index:60; font-size:14px;}
   .hidden{display:none!important;}
   .result{font-family:var(--display); font-size:18px; font-weight:800; color:var(--accent);}
-  .ball-timeline{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+  .ball-timeline{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; align-items:center;}
+  .oversep{display:inline-block; width:3px; align-self:stretch; min-height:22px; background:var(--accent); opacity:.5; border-radius:2px; margin:0 3px;}
   .b{width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
      font-size:12px; font-weight:700; background:#fbf7ea; border:1px solid var(--line); color:var(--txt); font-family:var(--display);}
   .b.w{background:var(--danger); color:#fff; border-color:#6d160f;} .b.four{background:#dfe8dc; color:#204029; border-color:#2f5d3f;}
@@ -240,7 +241,7 @@ function derive(match, inn){
       if(r%2===1) swap();
       timeline.push({t:String(r), cls: r===4?'four': r===6?'six': ''});
     }
-    if(ballInOver===6){ ballInOver=0; swap(); }
+    if(ballInOver===6){ ballInOver=0; swap(); timeline.push({sep:true}); }
   }
 
   const allOut = wickets >= (battingPlayers.length-1);
@@ -1172,7 +1173,7 @@ function scoreboardHTML(m,inn,s){
       <span>${esc(nst.name)} ${nst.runs} (${nst.balls})</span>
       ${bw?`<span class="muted">🎳 ${esc(bw.name)} ${oversStr(bw.balls)}-${bw.runs}-${bw.wkts}</span>`:''}
     </div>
-    <div class="ball-timeline">${s.timeline.slice(-12).map(b=>`<span class="b ${b.cls}">${b.t}</span>`).join('')}</div>
+    <div class="ball-timeline">${s.timeline.slice(-18).map(b=> b.sep ? '<span class="oversep" title="end of over"></span>' : `<span class="b ${b.cls}">${b.t}</span>`).join('')}</div>
   </div>`;
 }
 
