@@ -194,7 +194,7 @@ function pName(m,id){
 function derive(match, inn){
   const battingPlayers = match.teams[inn.batting].players; // [{id,name}]
   const bat={}, bowl={};   // keyed by player id
-  const ensureBat=id=>{ if(id && !bat[id]) bat[id]={id,name:pName(match,id),runs:0,balls:0,fours:0,sixes:0,out:null}; };
+  const ensureBat=id=>{ if(id && !bat[id]) bat[id]={id,name:pName(match,id),runs:0,balls:0,fours:0,sixes:0,out:null,retired:false}; };
   const ensureBowl=id=>{ if(id && !bowl[id]) bowl[id]={id,name:pName(match,id),balls:0,runs:0,wkts:0}; };
   let total=0, wickets=0, legalBalls=0, extrasTotal=0;
   let striker=inn.strikerInit, nonStriker=inn.nonStrikerInit;
@@ -227,16 +227,25 @@ function derive(match, inn){
     total+=r; b.runs+=r; b.balls+=1; legalBalls++; ballInOver++;
 
     if(d.wicket){
-      wickets++;
       const outWho = d.wicket.out==='nonstriker' ? 'nonStriker':'striker';
       const outName = outWho==='striker'? striker : nonStriker;
-      let how = d.wicket.type;
-      bat[outName].out = { type:how, catcher:d.wicket.catcher||null, bowler:d.bowler };
-      if(how!=='run out') b.wkts++;
-      // bring in new batsman to the vacated end
+      const how = d.wicket.type;
+      if(how==='retired hurt'){
+        // NOT out, NOT a wicket — set aside; this batter can return later
+        bat[outName].out = null;
+        bat[outName].retired = true;
+        timeline.push({t:'Ret',cls:'ex'});
+      }else{
+        bat[outName].out = { type:how, catcher:d.wicket.catcher||null, bowler:d.bowler };
+        bat[outName].retired = false;
+        wickets++;
+        if(how!=='run out' && how!=='retired out') b.wkts++;   // retired out isn't the bowler's wicket
+        timeline.push({t: how==='retired out'?'RO':'W', cls: how==='retired out'?'ex':'w'});
+      }
+      // bring in the new batsman (may be a returning retired-hurt player)
       if(outWho==='striker') striker = d.newBatsman; else nonStriker = d.newBatsman;
       ensureBat(striker); ensureBat(nonStriker);
-      timeline.push({t:'W',cls:'w'});
+      if(d.newBatsman && bat[d.newBatsman]) bat[d.newBatsman].retired=false; // back at the crease
     }else{
       if(r%2===1) swap();
       timeline.push({t:String(r), cls: r===4?'four': r===6?'six': ''});
@@ -246,7 +255,14 @@ function derive(match, inn){
 
   const allOut = wickets >= (battingPlayers.length-1);
   const oversDone = legalBalls >= inn.overs*6;
-  const complete = inn.closed || allOut || oversDone;
+  const isSecond = match.innings && match.innings[1] === inn;
+  let targetReached = false;
+  if(isSecond && match.innings && match.innings[0]){
+    const first = derive(match, match.innings[0]);
+    if(total > first.total) targetReached = true;
+  }
+  const outOfBatters = !striker || !nonStriker;   // a dismissal left nobody to come in
+  const complete = inn.closed || allOut || oversDone || targetReached || outOfBatters;
   // current bowler = bowler of the last delivery of the in-progress over
   let curBowler=null;
   if(ballInOver>0){ // find bowler of current over
@@ -998,6 +1014,7 @@ function drawPractice(p){
       <div class="extras">
         <button class="btn" onclick="practiceExtra('${p.id}','wide')">Wide</button>
         <button class="btn" onclick="practiceExtra('${p.id}','noball')">No-ball</button>
+        <button class="btn danger" onclick="practiceBall('${p.id}',-5)">-5 Runs</button>
       </div>
       <div class="row" style="margin-top:10px">
         <button class="btn danger" onclick="practiceOut('${p.id}')">OUT</button>
@@ -1130,7 +1147,7 @@ function drawMatch(m){
   // innings complete but match not done -> break screen
   if(s.complete){
     if(canScore) return drawInningsBreak(m,inn,s,header);
-    return app.innerHTML = header + `<div class="card center"><b>Innings complete.</b><br><span class="muted">Waiting for scorer…</span></div>` + historyLink(m);
+    return app.innerHTML = header + `<div class="card center"><b>Innings complete.</b><br><span class="muted">Waiting for scorer…</span><br><button class="btn blue sm" style="margin-top:10px" onclick="unlock('${m.id}')">✍️ Score this match</button></div>` + historyLink(m);
   }
 
   // live
@@ -1151,14 +1168,15 @@ function historyLink(m){
 
 function scoreboardHTML(m,inn,s){
   const battingName=m.teams[inn.batting].name;
-  const isSecond = m.currentInnings===1;
+  const isSecond = m.innings && m.innings[1] === inn;
   let chase='';
-  if(isSecond){
+  if(isSecond && m.innings[0]){
     const first=derive(m,m.innings[0]);
     const target=first.total+1, need=target-s.total, ballsLeft=inn.overs*6 - s.legalBalls;
     chase=`<div class="small" style="margin-top:4px">Target <b>${target}</b> · need <b>${need}</b> off <b>${ballsLeft}</b> balls</div>`;
   }
-  const st=s.bat[s.striker], nst=s.bat[s.nonStriker];
+  const st=(s.striker && s.bat[s.striker]) || { name: '—', runs: 0, balls: 0 };
+  const nst=(s.nonStriker && s.bat[s.nonStriker]) || { name: '—', runs: 0, balls: 0 };
   const bw=s.curBowler? s.bowl[s.curBowler]:null;
   return `<div class="card">
     <div class="small muted">${esc(m.teams.A.name)} vs ${esc(m.teams.B.name)} · ${esc(m.venue||'')} · ${esc(m.date||'')}
@@ -1282,25 +1300,25 @@ function wicketModal(id){
     if(!bowler){ toast('Select a bowler first'); return; }
     const fielders=m.teams[inn.bowling].players; // [{id,name}]
     const w={type:'bowled', out:'striker', catcher:null};
-    const types=['bowled','caught','lbw','run out','stumped'];
+    const types=['bowled','caught','lbw','run out','stumped','retired hurt','retired out'];
+    // available = not currently at crease and not dismissed; retired-hurt batters CAN return (shown with ↩)
     const availBatsmen=m.teams[inn.batting].players.filter(p=>{
-      // available = not currently at crease and not already out
       if(p.id===s.striker||p.id===s.nonStriker) return false;
       const b=s.bat[p.id]; return !(b&&b.out);
     });
     const render=()=>{
       $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
-        <h3 style="margin-top:0">Wicket 🏏</h3>
-        <label>How out?</label>
+        <h3 style="margin-top:0">Wicket / Retired 🏏</h3>
+        <label>Dismissal / Action</label>
         <div class="chips" id="wtype">${types.map(t=>`<div class="chip ${w.type===t?'sel':''}" onclick="__wset('type','${t}')">${t}</div>`).join('')}</div>
-        <label>Who is out?</label>
+        <label>Who is leaving?</label>
         <div class="chips">
           <div class="chip ${w.out==='striker'?'sel':''}" onclick="__wset('out','striker')">${esc(pName(m,s.striker))} (striker)</div>
           <div class="chip ${w.out==='nonstriker'?'sel':''}" onclick="__wset('out','nonstriker')">${esc(pName(m,s.nonStriker))} (non-striker)</div>
         </div>
         ${w.type==='caught'?`<label>Caught by</label><div class="chips">${fielders.map(f=>`<div class="chip ${w.catcher===f.id?'sel':''}" onclick="__wset('catcher','${f.id}')">${esc(f.name)}</div>`).join('')}</div>`:''}
-        <label>New batsman</label>
-        <div class="chips">${availBatsmen.map(p=>`<div class="chip ${w.newBatsman===p.id?'sel':''}" onclick="__wset('newBatsman','${p.id}')">${esc(p.name)}</div>`).join('')}</div>
+        <label>New batsman ${availBatsmen.length?'':'<span class="small" style="color:var(--warn)">(nobody left — confirm to end the innings)</span>'}</label>
+        <div class="chips">${availBatsmen.map(p=>{const ret=s.bat[p.id]&&s.bat[p.id].retired; return `<div class="chip ${w.newBatsman===p.id?'sel':''}" onclick="__wset('newBatsman','${p.id}')">${esc(p.name)}${ret?' ↩':''}</div>`;}).join('')}</div>
         <label>Runs completed this ball (usually 0)</label>
         <div class="chips">${[0,1,2,3].map(r=>`<div class="chip ${(w.runs||0)===r?'sel':''}" onclick="__wset('runs',${r})">${r}</div>`).join('')}</div>
         <div class="row" style="margin-top:14px">
@@ -1416,13 +1434,27 @@ async function finishMatch(id){
 }
 // End a match early (abandon / stop mid-innings) — scorer only.
 function endMatchModal(id){
-  $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
-    <h3 style="margin-top:0">End match now?</h3>
-    <p class="muted">This finishes the match with the current scores and shows a result. You can still view the scorecard and export it afterwards.</p>
-    <div class="row" style="margin-top:12px">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn danger" onclick="__endMatchOk('${id}')">End match</button>
-    </div></div></div>`;
+  COL().doc(id).get().then(doc=>{
+    if(!doc.exists) return;
+    const m=doc.data();
+    const isFirst = m.currentInnings===0;
+    $('modal').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+      <h3 style="margin-top:0">End match or innings early?</h3>
+      <p class="muted">${isFirst?'You can end the 1st innings now to start the 2nd innings, or end the entire match.':'This will finish the match with current scores.'}</p>
+      <div class="column" style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+        ${isFirst?`<button class="btn primary" onclick="__endInningsEarlyOk('${id}')">End 1st Innings ▶</button>`:''}
+        <button class="btn danger" onclick="__endMatchOk('${id}')">End match completely ⚑</button>
+        <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      </div></div></div>`;
+  });
+}
+async function __endInningsEarlyOk(id){
+  closeModal();
+  await withMatch(id, async m=>{
+    const cur=m.innings[m.currentInnings]; if(cur) cur.closed=true;
+    await saveMatch(m);
+    toast('1st Innings ended');
+  });
 }
 async function __endMatchOk(id){
   closeModal();
@@ -1437,11 +1469,16 @@ async function __endMatchOk(id){
 function drawSummary(m){
   const a=m.innings[0], b=m.innings[1];
   const sa=derive(m,a), sb=b?derive(m,b):null;
+  const canScore = SCORER[m.id];
   app.innerHTML=`<div class="card center">
     <div class="small muted">${esc(m.venue||'')} · ${esc(m.date||'')}</div>
     <h2 style="margin:6px 0">${esc(m.teams.A.name)} vs ${esc(m.teams.B.name)}</h2>
     <p class="result">🏆 ${esc(m.result||'')}</p>
-    <button class="btn blue sm" onclick="exportCSV('${m.id}')">⬇ Export CSV (for Google Sheets)</button>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      <button class="btn blue sm" onclick="exportCSV('${m.id}')">⬇ Export CSV (for Google Sheets)</button>
+      ${!b && canScore ? `<button class="btn primary sm" onclick="startSecond('${m.id}')">▶ Start 2nd Innings</button>` : ''}
+      ${!b && !canScore ? `<button class="btn ghost sm" onclick="unlock('${m.id}')">✍️ Score this match</button>` : ''}
+    </div>
   </div>
   ${inningsCard(m,a,sa)}
   ${b?inningsCard(m,b,sb):''}
@@ -1457,8 +1494,9 @@ function scorecardHTML(m,inn,s){
   return `<div class="card"><h3 style="margin-top:0">Scorecard</h3>${scorecardTables(m,inn,s)}</div>`;
 }
 function howOutStr(m,b){
-  if(!b.out) return 'not out';
+  if(!b.out) return b.retired ? 'retired not out' : 'not out';
   const o=b.out;
+  if(o.type==='retired out') return 'retired out';
   if(o.type==='caught') return `c ${esc(pName(m,o.catcher)||'?')} b ${esc(pName(m,o.bowler))}`;
   if(o.type==='bowled') return `b ${esc(pName(m,o.bowler))}`;
   if(o.type==='lbw') return `lbw b ${esc(pName(m,o.bowler))}`;
@@ -1532,8 +1570,9 @@ function exportCSV(id){
   });
 }
 function howOutStrPlain(m,b){
-  if(!b.out) return 'not out';
+  if(!b.out) return b.retired ? 'retired not out' : 'not out';
   const o=b.out;
+  if(o.type==='retired out') return 'retired out';
   if(o.type==='caught') return `c ${pName(m,o.catcher)||'?'} b ${pName(m,o.bowler)}`;
   if(o.type==='bowled') return `b ${pName(m,o.bowler)}`;
   if(o.type==='lbw') return `lbw b ${pName(m,o.bowler)}`;
